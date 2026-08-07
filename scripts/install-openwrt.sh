@@ -103,10 +103,10 @@ if [ -r /etc/openwrt_release ]; then
 	sdk_release=$(printf '%s\n' "$sdk_url" | sed -n 's#^https://downloads\.openwrt\.org/releases/\([^/]*\)/.*#\1#p')
 	detected_series=$(printf '%s\n' "$detected_release" | cut -d. -f1,2)
 	sdk_series=$(printf '%s\n' "$sdk_release" | cut -d. -f1,2)
-	[ -n "$detected_series" ] && [ "$detected_series" = "$sdk_series" ] || {
+	if [ -z "$detected_series" ] || [ "$detected_series" != "$sdk_series" ]; then
 		echo "This package was built for OpenWrt $sdk_release, but this device reports $detected_release." >&2
 		exit 1
-	}
+	fi
 fi
 
 package="$work/$asset"
