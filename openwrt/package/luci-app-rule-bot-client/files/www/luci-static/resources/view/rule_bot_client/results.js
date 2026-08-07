@@ -22,7 +22,7 @@ return view.extend({
 			return api.clear().then(function() { location.reload(); }).catch(api.notifyError);
 		};
 		return E('div', {}, [
-			E('h2', {}, 'Rule-Bot Client - ' + _('Local results')),
+			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Local results')),
 			E('p', {}, _('Search is bounded and reads only the fixed active output path.')),
 			E('div', {}, [ query, ' ', E('button', { class: 'btn cbi-button-action', click: search }, _('Search')) ]),
 			output,

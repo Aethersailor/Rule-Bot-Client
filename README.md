@@ -163,7 +163,18 @@ Debian 软件包和 systemd 的后台运行方式见 [`deploy/`](deploy/)；Open
 
 ### OpenWrt 单包
 
-OpenWrt 不发布手工复制的 tar.gz。`OpenWrt Packages` GitHub Actions 使用对应版本的官方 SDK 生成两类真正的包：OpenWrt 24.10 及更早的 IPK，以及 OpenWrt 25.12 起的 APK。每个架构只需安装一个 `luci-app-rule-bot-client` 包，包内同时包含核心二进制、procd 服务、UCI 配置、配置适配后端和 LuCI 页面。
+OpenWrt 不发布手工复制的 tar.gz。`OpenWrt Packages` GitHub Actions 使用对应版本的官方 SDK 生成两类真正的包：OpenWrt 24.10 的 IPK，以及 OpenWrt 25.12 的 APK。每个架构只需安装一个 `luci-app-rule-bot-client` 包，包内同时包含核心二进制、procd 服务、UCI 配置、配置适配后端和 LuCI 页面。
+
+普通用户推荐只下载统一安装入口。该脚本会识别本机使用 apk 还是 opkg，再从同一正式版本的 manifest 中选择本机支持的包架构；下载后同时核对文件大小和 SHA-256，最终仍由原生包管理器完成安装：
+
+```sh
+wget -O /tmp/install-rule-bot-client-openwrt.sh \
+  https://github.com/Aethersailor/Rule-Bot-Client/releases/latest/download/install-rule-bot-client-openwrt.sh
+less /tmp/install-rule-bot-client-openwrt.sh
+sh /tmp/install-rule-bot-client-openwrt.sh
+```
+
+需要离线安装或自行审核包身份时，也可以从同一 Release 下载与本机管理器和架构匹配的单包，并对照 `openwrt-manifest.tsv` 或 `openwrt-checksums.txt` 校验：
 
 ```sh
 # OpenWrt 24.10（opkg）

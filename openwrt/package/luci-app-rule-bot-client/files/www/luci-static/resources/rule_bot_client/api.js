@@ -20,14 +20,34 @@ const calls = {
 
 function checked(promise) {
 	return Promise.resolve(promise).then(function(result) {
-		if (result && result.ok === false)
-			throw new Error(result.error || 'Rule-Bot Client backend error');
+		if (result && result.ok === false) {
+			const error = new Error(_('Operation failed'));
+			error.detail = result.error || _('Rule-Bot Client backend error');
+			error.code = result.error_code || 'backend_error';
+			throw error;
+		}
 		return result;
 	});
 }
 
+function errorNodes(error) {
+	const summary = (error && error.message) || _('Operation failed');
+	const detail = error && error.detail;
+	const nodes = [ E('p', {}, summary) ];
+	if (detail && detail !== summary)
+		nodes.push(detailNode(_('Technical details'), detail));
+	return nodes;
+}
+
+function detailNode(summary, detail) {
+	return E('details', {}, [
+		E('summary', {}, summary),
+		E('pre', { style: 'white-space: pre-wrap' }, String(detail))
+	]);
+}
+
 function notifyError(error) {
-	ui.addNotification(null, E('p', {}, error.message || String(error)), 'error');
+	ui.addNotification(null, E('div', {}, errorNodes(error)), 'error');
 }
 
 function download(filename, content, mime) {
@@ -42,6 +62,8 @@ function download(filename, content, mime) {
 
 return baseclass.extend({
 	notifyError: notifyError,
+	errorNodes: errorNodes,
+	detailNode: detailNode,
 	download: download,
 	config: function() { return checked(calls.config()); },
 	status: function() { return checked(calls.status()); },

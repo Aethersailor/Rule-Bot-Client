@@ -88,7 +88,7 @@ func writeResult(result any, err error) {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(true)
 	if err != nil {
-		_ = encoder.Encode(map[string]any{"ok": false, "error": err.Error()})
+		_ = encoder.Encode(map[string]any{"ok": false, "error_code": "backend_request_failed", "error": err.Error()})
 		return
 	}
 	if result == nil {

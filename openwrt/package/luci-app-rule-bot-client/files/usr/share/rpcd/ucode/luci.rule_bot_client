@@ -14,7 +14,7 @@ const allowed_actions = {
 
 function invoke(action, args) {
 	if (!allowed_actions[action])
-		return { ok: false, error: 'Unsupported Rule-Bot Client backend action' };
+		return { ok: false, error_code: 'unsupported_backend_action', error: 'Unsupported Rule-Bot Client backend action' };
 	const uuid = replace(trim(readfile('/proc/sys/kernel/random/uuid')), '-', '');
 	const request = `${request_dir}/${uuid}.json`;
 	writefile(request, args ?? {});
@@ -24,18 +24,18 @@ function invoke(action, args) {
 	const process = popen(`${helper} ${action} ${uuid}`, 'r');
 	if (!process) {
 		unlink(request);
-		return { ok: false, error: `Unable to start Rule-Bot Client backend (${fs_error()})` };
+		return { ok: false, error_code: 'backend_start_failed', error: `Unable to start Rule-Bot Client backend (${fs_error()})` };
 	}
 	const stdout = process.read('all');
 	process.close();
 	unlink(request);
 	if (!stdout)
-		return { ok: false, error: 'Rule-Bot Client backend returned no result' };
+		return { ok: false, error_code: 'backend_empty_result', error: 'Rule-Bot Client backend returned no result' };
 	let parsed;
 	try {
 		parsed = json(stdout);
 	} catch (error) {
-		return { ok: false, error: 'Rule-Bot Client backend returned invalid JSON' };
+		return { ok: false, error_code: 'backend_invalid_json', error: 'Rule-Bot Client backend returned invalid JSON' };
 	}
 	return parsed;
 }

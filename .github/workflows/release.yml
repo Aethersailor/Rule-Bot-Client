@@ -187,6 +187,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
-          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" -eq 17
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fx checksums.txt
+          ready=false
+          for attempt in $(seq 1 120); do
+            gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
+            if test "$(wc -l < release-assets.txt)" -eq 28 \
+              && grep -Fx checksums.txt release-assets.txt \
+              && grep -Fx openwrt-checksums.txt release-assets.txt \
+              && grep -Fx openwrt-manifest.tsv release-assets.txt \
+              && grep -Fx install-rule-bot-client-openwrt.sh release-assets.txt \
+              && test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq 8; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" = true
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false

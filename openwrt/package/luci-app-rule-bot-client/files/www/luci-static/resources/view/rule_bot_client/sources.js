@@ -30,7 +30,9 @@ return view.extend({
 				E('div', { class: 'right' }, E('button', { class: 'btn', click: ui.hideModal }, _('Close')))
 			]);
 		}).catch(function(error) {
-			ui.showModal(_('Test connection'), [ E('p', {}, error.message), E('div', { class: 'right' }, E('button', { class: 'btn', click: ui.hideModal }, _('Close'))) ]);
+			ui.showModal(_('Test connection'), api.errorNodes(error).concat([
+				E('div', { class: 'right' }, E('button', { class: 'btn', click: ui.hideModal }, _('Close')))
+			]));
 		});
 	},
 
@@ -147,19 +149,19 @@ return view.extend({
 				automatic.push(E('tr', { class: 'tr' }, [
 					E('td', { class: 'td' }, checkbox),
 					E('td', { class: 'td' }, source.name),
-					E('td', { class: 'td' }, adapter.available ? (adapter.url || '-') : (adapter.error || _('Waiting'))),
+					E('td', { class: 'td' }, adapter.available ? (adapter.url || '-') : (adapter.error ? api.detailNode(_('Unavailable'), adapter.error) : _('Waiting'))),
 					E('td', { class: 'td' }, source.type === 'nikki' ? [ preferTLS, ' ', _('Use Nikki TLS controller') ] : '-'),
 					E('td', { class: 'td' }, actions)
 				]));
 			}
 		}, this);
 		return E('div', {}, [
-			E('h2', {}, 'Rule-Bot Client - ' + _('Listening targets')),
+			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Listening targets')),
 			E('p', {}, _('OpenClash, Nikki, and multiple manual controllers may be enabled in any combination.')),
 			E('h3', {}, _('Automatic adapters')),
-			E('div', { class: 'table' }, [ E('tr', { class: 'tr table-titles' }, [ E('th', { class: 'th' }, _('Enabled')), E('th', { class: 'th' }, _('Adapter')), E('th', { class: 'th' }, _('Discovery')), E('th', { class: 'th' }, 'TLS'), E('th', { class: 'th' }, _('Action')) ]) ].concat(automatic)),
+			E('div', { class: 'table' }, [ E('tr', { class: 'tr table-titles' }, [ E('th', { class: 'th' }, _('Enabled')), E('th', { class: 'th' }, _('Adapter')), E('th', { class: 'th' }, _('Discovery')), E('th', { class: 'th' }, _('TLS')), E('th', { class: 'th' }, _('Action')) ]) ].concat(automatic)),
 			E('h3', {}, _('Manual Mihomo controllers')),
-			E('div', { class: 'table' }, [ E('tr', { class: 'tr table-titles' }, [ E('th', { class: 'th' }, _('Enabled')), E('th', { class: 'th' }, _('Display name')), E('th', { class: 'th' }, _('Controller URL')), E('th', { class: 'th' }, 'Secret'), E('th', { class: 'th' }, _('Action')) ]) ].concat(manual.length ? manual : [ E('tr', { class: 'tr' }, E('td', { class: 'td', colspan: 5 }, _('No manual targets'))) ])),
+			E('div', { class: 'table' }, [ E('tr', { class: 'tr table-titles' }, [ E('th', { class: 'th' }, _('Enabled')), E('th', { class: 'th' }, _('Display name')), E('th', { class: 'th' }, _('Controller URL')), E('th', { class: 'th' }, _('Secret')), E('th', { class: 'th' }, _('Action')) ]) ].concat(manual.length ? manual : [ E('tr', { class: 'tr' }, E('td', { class: 'td', colspan: 5 }, _('No manual targets'))) ])),
 			E('div', { class: 'cbi-page-actions' }, [
 				E('button', { class: 'btn cbi-button-add', click: ui.createHandlerFn(this, this.showEditor, null, null) }, _('Add target')), ' ',
 				E('button', { class: 'btn cbi-button-positive important', click: ui.createHandlerFn(this, this.saveAll) }, _('Save and apply'))

@@ -9,7 +9,7 @@ return view.extend({
 		const status = data[1];
 		const upgrade = data[2];
 		return E('div', {}, [
-			E('h2', {}, 'Rule-Bot Client - ' + _('Logs and diagnostics')),
+			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Logs and diagnostics')),
 			E('h3', {}, _('Sanitized status')),
 			E('pre', { style: 'max-height: 35vh; overflow: auto' }, JSON.stringify(status, null, 2)),
 			E('h3', {}, _('Recent service logs')),

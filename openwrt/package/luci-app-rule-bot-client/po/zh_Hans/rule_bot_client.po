@@ -23,7 +23,7 @@ msgid "After sysupgrade, reinstall the single matching package or run /etc/rule-
 msgstr "sysupgrade 后请重装匹配的单包，或运行 /etc/rule-bot-client/recover.sh；脚本会识别 apk/opkg 与架构，且绝不会自动执行。"
 
 msgid "An offline controller may be saved; Rule-Bot Client will reconnect independently."
-msgstr "离线 Controller 也可保存；Rule-Bot Client 会独立重连。"
+msgstr "离线控制器也可保存；Rule-Bot 客户端会独立重连。"
 
 msgid "Automatic adapters"
 msgstr "自动适配器"
@@ -32,7 +32,7 @@ msgid "Backup and restore"
 msgstr "备份与恢复"
 
 msgid "Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded."
-msgstr "备份包含 UCI、凭据、证书、排除清单、持久数据、Rule-Bot 状态和恢复脚本；不包含运行时配置、自动发现 Secret 与状态。"
+msgstr "备份包含 UCI、凭据、证书、排除清单、持久数据、Rule-Bot 状态和恢复脚本；不包含运行时配置、自动发现密钥与状态。"
 
 msgid "bytes"
 msgstr "字节"
@@ -53,10 +53,10 @@ msgid "Clear existing CA"
 msgstr "清除现有 CA"
 
 msgid "Clear existing secret"
-msgstr "清除现有 Secret"
+msgstr "清除现有密钥"
 
 msgid "Clear existing token"
-msgstr "清除现有 Token"
+msgstr "清除现有令牌"
 
 msgid "Clear safely"
 msgstr "安全清空"
@@ -71,16 +71,16 @@ msgid "complete"
 msgstr "完整"
 
 msgid "Complete endpoint"
-msgstr "完整 Endpoint"
+msgstr "完整接口地址"
 
 msgid "Connected"
 msgstr "已连接"
 
 msgid "Controller secret"
-msgstr "Controller Secret"
+msgstr "控制器密钥"
 
 msgid "Controller URL"
-msgstr "Controller 地址"
+msgstr "控制器地址"
 
 msgid "Create backup"
 msgstr "创建备份"
@@ -121,11 +121,17 @@ msgstr "启用"
 msgid "Events"
 msgstr "事件数"
 
+msgid "Error recorded"
+msgstr "已记录错误"
+
 msgid "External data directory"
 msgstr "外部数据目录"
 
 msgid "External mount"
 msgstr "外部挂载"
+
+msgid "External storage"
+msgstr "外部存储"
 
 msgid "External storage is never replaced by overlay storage."
 msgstr "外部存储缺失时绝不会静默回退到 Overlay。"
@@ -161,7 +167,7 @@ msgid "Logs and diagnostics"
 msgstr "日志与诊断"
 
 msgid "Manual Mihomo controllers"
-msgstr "手工 Mihomo Controller"
+msgstr "手工 Mihomo 控制器"
 
 msgid "Nikki TLS settings"
 msgstr "Nikki TLS 设置"
@@ -179,13 +185,16 @@ msgid "No runtime status yet"
 msgstr "尚无运行状态"
 
 msgid "No secret configured"
-msgstr "未配置 Secret"
+msgstr "未配置密钥"
 
 msgid "OpenClash, Nikki, and multiple manual controllers may be enabled in any combination."
-msgstr "OpenClash、Nikki 与多个手工 Controller 可任意组合启用。"
+msgstr "OpenClash、Nikki 与多个手工控制器可任意组合启用。"
 
 msgid "Operation completed"
 msgstr "操作已完成"
+
+msgid "Operation failed"
+msgstr "操作失败"
 
 msgid "Optional"
 msgstr "可选"
@@ -200,13 +209,16 @@ msgid "Overview"
 msgstr "概览"
 
 msgid "Paste the complete endpoint including its non-root path."
-msgstr "粘贴包含非根路径的完整 Endpoint。"
+msgstr "粘贴包含非根路径的完整接口地址。"
 
 msgid "Paste token"
-msgstr "粘贴 Token"
+msgstr "粘贴令牌（Token）"
 
 msgid "Persistent /etc/rule-bot-client/data"
 msgstr "持久化 /etc/rule-bot-client/data"
+
+msgid "Persistent storage"
+msgstr "持久化存储"
 
 msgid "Recent error"
 msgstr "最近错误"
@@ -230,10 +242,16 @@ msgid "Restore backup"
 msgstr "恢复备份"
 
 msgid "Restore this Rule-Bot Client backup and reload the service?"
-msgstr "恢复此 Rule-Bot Client 备份并重新加载服务？"
+msgstr "恢复此 Rule-Bot 客户端备份并重新加载服务？"
 
 msgid "Rule-Bot is a single shared delivery state for all controller instances."
-msgstr "所有 Controller 实例共享唯一的 Rule-Bot 投递状态。"
+msgstr "所有控制器实例共享唯一的 Rule-Bot 投递状态。"
+
+msgid "Rule-Bot Client"
+msgstr "Rule-Bot 客户端"
+
+msgid "Rule-Bot Client backend error"
+msgstr "Rule-Bot 客户端后端错误"
 
 msgid "Running"
 msgstr "运行中"
@@ -254,7 +272,10 @@ msgid "Search is bounded and reads only the fixed active output path."
 msgstr "搜索有数量边界，且只读取固定的当前输出路径。"
 
 msgid "Secret configured"
-msgstr "已配置 Secret"
+msgstr "已配置密钥"
+
+msgid "Secret"
+msgstr "密钥"
 
 msgid "Send existing domains"
 msgstr "发送已有域名"
@@ -280,26 +301,41 @@ msgstr "存储模式"
 msgid "Temporary /tmp/rule-bot-client/data"
 msgstr "临时 /tmp/rule-bot-client/data"
 
+msgid "Temporary storage"
+msgstr "临时存储"
+
+msgid "Technical details"
+msgstr "技术详情"
+
 msgid "Test connection"
 msgstr "测试连接"
 
 msgid "TLS server name"
-msgstr "TLS Server Name"
+msgstr "TLS 服务器名称"
+
+msgid "TLS"
+msgstr "TLS"
 
 msgid "Token"
-msgstr "Token"
+msgstr "令牌（Token）"
 
 msgid "Token configured; leave empty to preserve"
-msgstr "已配置 Token；留空则保留"
+msgstr "已配置令牌；留空则保留"
 
 msgid "Upgrade identity"
 msgstr "升级身份"
 
+msgid "Unavailable"
+msgstr "不可用"
+
 msgid "Use Nikki TLS controller"
-msgstr "使用 Nikki TLS Controller"
+msgstr "使用 Nikki TLS 控制器"
 
 msgid "Waiting"
 msgstr "等待中"
 
 msgid "Work mode"
 msgstr "工作模式"
+
+msgid "sysupgrade keep.d"
+msgstr "sysupgrade 保留清单（keep.d）"

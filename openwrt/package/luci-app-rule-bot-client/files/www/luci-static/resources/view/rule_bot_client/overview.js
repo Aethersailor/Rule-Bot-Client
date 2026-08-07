@@ -16,14 +16,14 @@ function statusTable(status) {
 			E('td', { class: 'td' }, item.connected ? _('Connected') : _('Disconnected')),
 			E('td', { class: 'td' }, String(item.captured_events || 0)),
 			E('td', { class: 'td' }, item.last_event_at || '-'),
-			E('td', { class: 'td' }, item.recent_error || '-')
+			E('td', { class: 'td' }, item.recent_error ? api.detailNode(_('Error recorded'), item.recent_error) : '-')
 		]);
 	});
 	return E('div', {}, [
 		E('h3', {}, _('Service status')),
 		E('div', { class: 'cbi-section-node' }, [
 			E('p', {}, [ E('strong', {}, _('Service status') + ': '), status.service === 'running' ? _('Running') : _('Stopped') ]),
-			E('p', {}, [ E('strong', {}, _('Storage') + ': '), (status.storage && status.storage.path) || status.config.storage.mode ]),
+			E('p', {}, [ E('strong', {}, _('Storage') + ': '), storageValue(status) ]),
 			E('p', {}, [ E('strong', {}, _('Output') + ': '), status.output && status.output.exists ? String(status.output.bytes || 0) + ' ' + _('bytes') : '-' ])
 		]),
 		E('div', { class: 'table' }, [
@@ -32,13 +32,25 @@ function statusTable(status) {
 	]);
 }
 
+function storageValue(status) {
+	if (status.storage && status.storage.path)
+		return status.storage.path;
+	const mode = status.config && status.config.storage && status.config.storage.mode;
+	const labels = {
+		persistent: _('Persistent storage'),
+		temporary: _('Temporary storage'),
+		external: _('External storage')
+	};
+	return labels[mode] || '-';
+}
+
 return view.extend({
 	load: function() { return api.status(); },
 	render: function(status) {
-		const container = E('div', {}, [ E('h2', {}, 'Rule-Bot Client - ' + _('Overview')), statusTable(status) ]);
+		const container = E('div', {}, [ E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Overview')), statusTable(status) ]);
 		poll.add(function() {
 			return api.status().then(function(fresh) {
-				container.replaceChildren(E('h2', {}, 'Rule-Bot Client - ' + _('Overview')), statusTable(fresh));
+				container.replaceChildren(E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Overview')), statusTable(fresh));
 			}).catch(api.notifyError);
 		}, 5);
 		container.appendChild(E('div', { class: 'cbi-page-actions' }, [

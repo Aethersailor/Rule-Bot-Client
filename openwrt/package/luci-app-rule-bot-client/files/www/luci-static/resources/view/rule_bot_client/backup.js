@@ -32,9 +32,9 @@ return view.extend({
 			reader.readAsDataURL(file.files[0]);
 		};
 		return E('div', {}, [
-			E('h2', {}, 'Rule-Bot Client - ' + _('Backup and restore')),
+			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Backup and restore')),
 			E('p', {}, _('Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded.')),
-			E('p', {}, [ E('strong', {}, 'sysupgrade keep.d: '), upgrade.complete ? _('complete') : _('incomplete') ]),
+			E('p', {}, [ E('strong', {}, _('sysupgrade keep.d') + ': '), upgrade.complete ? _('complete') : _('incomplete') ]),
 			E('pre', {}, upgrade.keep_list || ''),
 			E('div', { class: 'cbi-page-actions' }, [
 				E('button', { class: 'btn cbi-button-action', click: backup }, _('Create backup')), ' ',
