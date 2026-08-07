@@ -1,0 +1,82 @@
+#!/usr/bin/ucode
+
+'use strict';
+
+import { chmod, error as fs_error, popen, readfile, writefile, unlink } from 'fs';
+
+const helper = '/usr/libexec/rule-bot-client-openwrt';
+const request_dir = '/var/run/rule-bot-client/rpc';
+const allowed_actions = {
+	config: true, status: true, probe: true, domains: true, export: true,
+	logs: true, backup: true, upgrade: true, save: true, clear: true,
+	restore: true, service: true
+};
+
+function invoke(action, args) {
+	if (!allowed_actions[action])
+		return { ok: false, error: 'Unsupported Rule-Bot Client backend action' };
+	const uuid = replace(trim(readfile('/proc/sys/kernel/random/uuid')), '-', '');
+	const request = `${request_dir}/${uuid}.json`;
+	writefile(request, args ?? {});
+	chmod(request, 0o600);
+	// The command is composed exclusively from the allowlisted action above and
+	// a kernel-generated hexadecimal UUID; no request value reaches the shell.
+	const process = popen(`${helper} ${action} ${uuid}`, 'r');
+	if (!process) {
+		unlink(request);
+		return { ok: false, error: `Unable to start Rule-Bot Client backend (${fs_error()})` };
+	}
+	const stdout = process.read('all');
+	process.close();
+	unlink(request);
+	if (!stdout)
+		return { ok: false, error: 'Rule-Bot Client backend returned no result' };
+	let parsed;
+	try {
+		parsed = json(stdout);
+	} catch (error) {
+		return { ok: false, error: 'Rule-Bot Client backend returned invalid JSON' };
+	}
+	return parsed;
+}
+
+const methods = {
+	config: { call: function() { return invoke('config', {}); } },
+	status: { call: function() { return invoke('status', {}); } },
+	probe: {
+		args: { id: 'id' },
+		call: function(request) { return invoke('probe', { id: request.args.id }); }
+	},
+	domains: {
+		args: { query: '', offset: 0, limit: 100 },
+		call: function(request) {
+			return invoke('domains', {
+				query: request.args.query,
+				offset: request.args.offset,
+				limit: request.args.limit
+			});
+		}
+	},
+	export: { call: function() { return invoke('export', {}); } },
+	logs: { call: function() { return invoke('logs', {}); } },
+	backup: { call: function() { return invoke('backup', {}); } },
+	upgrade: { call: function() { return invoke('upgrade', {}); } },
+	save: {
+		args: { payload: {} },
+		call: function(request) { return invoke('save', request.args.payload); }
+	},
+	clear: {
+		args: { confirm: '' },
+		call: function(request) { return invoke('clear', { confirm: request.args.confirm }); }
+	},
+	restore: {
+		args: { archive: '' },
+		call: function(request) { return invoke('restore', { archive: request.args.archive }); }
+	},
+	service: {
+		args: { action: '' },
+		call: function(request) { return invoke('service', { action: request.args.action }); }
+	}
+};
+
+return { 'luci.rule_bot_client': methods };

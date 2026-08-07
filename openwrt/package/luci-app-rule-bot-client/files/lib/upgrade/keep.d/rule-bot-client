@@ -1,0 +1,6 @@
+/etc/config/rule_bot_client
+/etc/rule-bot-client/credentials/
+/etc/rule-bot-client/certs/
+/etc/rule-bot-client/exclude.list
+/etc/rule-bot-client/data/
+/etc/rule-bot-client/recover.sh

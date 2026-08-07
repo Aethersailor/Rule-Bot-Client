@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "output": "/var/lib/rule-bot-client/domains.txt",
+  "domain_mode": "registrable_domain",
+  "flush_interval": "5s",
+  "include_failed_connections": true,
+  "include_single_label_hosts": false,
+  "instances": [
+    {
+      "name": "local",
+      "url": "http://127.0.0.1:9090",
+      "secret_file": "/etc/rule-bot-client/local.secret"
+    }
+  ]
+}

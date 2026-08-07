@@ -1,0 +1,305 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Rule-Bot Client\n"
+"PO-Revision-Date: 2026-08-07 17:20+0800\n"
+"Last-Translator: Rule-Bot Client maintainers\n"
+"Language-Team: Simplified Chinese\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Action"
+msgstr "操作"
+
+msgid "Adapter"
+msgstr "适配器"
+
+msgid "Add target"
+msgstr "添加目标"
+
+msgid "After sysupgrade, reinstall the single matching package or run /etc/rule-bot-client/recover.sh. The script detects apk/opkg and architecture; it never runs automatically."
+msgstr "sysupgrade 后请重装匹配的单包，或运行 /etc/rule-bot-client/recover.sh；脚本会识别 apk/opkg 与架构，且绝不会自动执行。"
+
+msgid "An offline controller may be saved; Rule-Bot Client will reconnect independently."
+msgstr "离线 Controller 也可保存；Rule-Bot Client 会独立重连。"
+
+msgid "Automatic adapters"
+msgstr "自动适配器"
+
+msgid "Backup and restore"
+msgstr "备份与恢复"
+
+msgid "Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded."
+msgstr "备份包含 UCI、凭据、证书、排除清单、持久数据、Rule-Bot 状态和恢复脚本；不包含运行时配置、自动发现 Secret 与状态。"
+
+msgid "bytes"
+msgstr "字节"
+
+msgid "CA already configured; leave empty to preserve"
+msgstr "已配置 CA；留空则保留"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Choose a backup archive first."
+msgstr "请先选择备份文件。"
+
+msgid "Clear domains and Rule-Bot state together? This cannot be undone."
+msgstr "同时清空域名与 Rule-Bot 状态？此操作无法撤销。"
+
+msgid "Clear existing CA"
+msgstr "清除现有 CA"
+
+msgid "Clear existing secret"
+msgstr "清除现有 Secret"
+
+msgid "Clear existing token"
+msgstr "清除现有 Token"
+
+msgid "Clear safely"
+msgstr "安全清空"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Collection and Rule-Bot"
+msgstr "收集与 Rule-Bot"
+
+msgid "complete"
+msgstr "完整"
+
+msgid "Complete endpoint"
+msgstr "完整 Endpoint"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Controller secret"
+msgstr "Controller Secret"
+
+msgid "Controller URL"
+msgstr "Controller 地址"
+
+msgid "Create backup"
+msgstr "创建备份"
+
+msgid "Custom CA PEM"
+msgstr "自定义 CA PEM"
+
+msgid "Default is off to prevent historical bulk delivery."
+msgstr "默认关闭，避免批量投递历史记录。"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete this target? Existing domains and Rule-Bot state will be kept."
+msgstr "删除此目标？已有域名与 Rule-Bot 状态会保留。"
+
+msgid "Disconnected"
+msgstr "未连接"
+
+msgid "Discovery"
+msgstr "发现结果"
+
+msgid "Display name"
+msgstr "显示名称"
+
+msgid "Domain mode"
+msgstr "域名模式"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "Enabled"
+msgstr "启用"
+
+msgid "Events"
+msgstr "事件数"
+
+msgid "External data directory"
+msgstr "外部数据目录"
+
+msgid "External mount"
+msgstr "外部挂载"
+
+msgid "External storage is never replaced by overlay storage."
+msgstr "外部存储缺失时绝不会静默回退到 Overlay。"
+
+msgid "Flush interval"
+msgstr "刷盘间隔"
+
+msgid "Full hostname"
+msgstr "完整主机名"
+
+msgid "incomplete"
+msgstr "不完整"
+
+msgid "Instance"
+msgstr "实例"
+
+msgid "Last event"
+msgstr "最后事件"
+
+msgid "Listening targets"
+msgstr "监听目标"
+
+msgid "Local collection and Rule-Bot"
+msgstr "本地收集并提交 Rule-Bot"
+
+msgid "Local collection only"
+msgstr "仅本地收集"
+
+msgid "Local results"
+msgstr "本地结果"
+
+msgid "Logs and diagnostics"
+msgstr "日志与诊断"
+
+msgid "Manual Mihomo controllers"
+msgstr "手工 Mihomo Controller"
+
+msgid "Nikki TLS settings"
+msgstr "Nikki TLS 设置"
+
+msgid "No collected domains"
+msgstr "尚未收集域名"
+
+msgid "No logs"
+msgstr "暂无日志"
+
+msgid "No manual targets"
+msgstr "暂无手工目标"
+
+msgid "No runtime status yet"
+msgstr "尚无运行状态"
+
+msgid "No secret configured"
+msgstr "未配置 Secret"
+
+msgid "OpenClash, Nikki, and multiple manual controllers may be enabled in any combination."
+msgstr "OpenClash、Nikki 与多个手工 Controller 可任意组合启用。"
+
+msgid "Operation completed"
+msgstr "操作已完成"
+
+msgid "Optional"
+msgstr "可选"
+
+msgid "Outbound proxy URL"
+msgstr "出站代理地址"
+
+msgid "Output"
+msgstr "输出"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Paste the complete endpoint including its non-root path."
+msgstr "粘贴包含非根路径的完整 Endpoint。"
+
+msgid "Paste token"
+msgstr "粘贴 Token"
+
+msgid "Persistent /etc/rule-bot-client/data"
+msgstr "持久化 /etc/rule-bot-client/data"
+
+msgid "Recent error"
+msgstr "最近错误"
+
+msgid "Recent service logs"
+msgstr "最近服务日志"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Registrable domain"
+msgstr "可注册域名"
+
+msgid "Reload"
+msgstr "重新加载"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Restore backup"
+msgstr "恢复备份"
+
+msgid "Restore this Rule-Bot Client backup and reload the service?"
+msgstr "恢复此 Rule-Bot Client 备份并重新加载服务？"
+
+msgid "Rule-Bot is a single shared delivery state for all controller instances."
+msgstr "所有 Controller 实例共享唯一的 Rule-Bot 投递状态。"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Sanitized status"
+msgstr "脱敏状态"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save and apply"
+msgstr "保存并应用"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search is bounded and reads only the fixed active output path."
+msgstr "搜索有数量边界，且只读取固定的当前输出路径。"
+
+msgid "Secret configured"
+msgstr "已配置 Secret"
+
+msgid "Send existing domains"
+msgstr "发送已有域名"
+
+msgid "Service status"
+msgstr "服务状态"
+
+msgid "Skip certificate verification"
+msgstr "跳过证书验证"
+
+msgid "State"
+msgstr "状态"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Storage"
+msgstr "存储"
+
+msgid "Storage mode"
+msgstr "存储模式"
+
+msgid "Temporary /tmp/rule-bot-client/data"
+msgstr "临时 /tmp/rule-bot-client/data"
+
+msgid "Test connection"
+msgstr "测试连接"
+
+msgid "TLS server name"
+msgstr "TLS Server Name"
+
+msgid "Token"
+msgstr "Token"
+
+msgid "Token configured; leave empty to preserve"
+msgstr "已配置 Token；留空则保留"
+
+msgid "Upgrade identity"
+msgstr "升级身份"
+
+msgid "Use Nikki TLS controller"
+msgstr "使用 Nikki TLS Controller"
+
+msgid "Waiting"
+msgstr "等待中"
+
+msgid "Work mode"
+msgstr "工作模式"

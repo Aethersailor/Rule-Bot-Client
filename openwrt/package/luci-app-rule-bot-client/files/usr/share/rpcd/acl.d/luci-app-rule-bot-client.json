@@ -1,0 +1,15 @@
+{
+	"luci-app-rule-bot-client": {
+		"description": "Grant access to fixed Rule-Bot Client management actions",
+		"read": {
+			"ubus": {
+				"luci.rule_bot_client": [ "config", "status", "probe", "domains", "export", "logs", "upgrade" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.rule_bot_client": [ "save", "clear", "backup", "restore", "service" ]
+			}
+		}
+	}
+}

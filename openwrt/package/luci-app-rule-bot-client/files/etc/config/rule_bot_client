@@ -1,0 +1,23 @@
+config main 'main'
+	option schema_version '1'
+	option enabled '1'
+	option work_mode 'local'
+	option domain_mode 'registrable_domain'
+	option flush_interval '5s'
+	option include_failed_connections '1'
+	option include_single_label_hosts '0'
+	option storage_mode 'persistent'
+
+config source 'openclash'
+	option type 'openclash'
+	option enabled '1'
+	option name 'OpenClash'
+
+config source 'nikki'
+	option type 'nikki'
+	option enabled '0'
+	option name 'Nikki'
+
+config rule_bot 'rule_bot'
+	option enabled '0'
+	option send_existing '0'

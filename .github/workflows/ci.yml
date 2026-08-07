@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and performance gates
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd internal)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 ./...
+
+      - name: Race test
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 ./...
+
+      - name: Record hot-path benchmarks
+        run: go test ./internal/client -run '^$' -bench 'Benchmark(ParseLogLine|FingerprintSet)' -benchmem -benchtime=100000x
+
+      - name: Build and enforce binary size
+        env:
+          TARGET_ARCH: amd64
+          OUTPUT: dist/rule-bot-client
+          VERSION: ci
+          COMMIT: ${{ github.sha }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: |
+          sh scripts/build-one.sh
+          test "$(wc -c < dist/rule-bot-client)" -le 8388608
+          dist/rule-bot-client --version | grep -F "commit=${GITHUB_SHA}"
+
+  cross-build:
+    name: Build linux/${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {label: amd64, arch: amd64}
+          - {label: "386", arch: "386"}
+          - {label: arm64, arch: arm64}
+          - {label: armv7, arch: arm, arm: "7"}
+          - {label: armv6, arch: arm, arm: "6"}
+          - {label: armv5, arch: arm, arm: "5"}
+          - {label: mips-softfloat, arch: mips, mips: softfloat}
+          - {label: mipsle-softfloat, arch: mipsle, mips: softfloat}
+          - {label: mips-hardfloat, arch: mips, mips: hardfloat}
+          - {label: mipsle-hardfloat, arch: mipsle, mips: hardfloat}
+          - {label: mips64, arch: mips64}
+          - {label: mips64le, arch: mips64le}
+          - {label: riscv64, arch: riscv64}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Cross-compile
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          TARGET_ARM: ${{ matrix.arm }}
+          TARGET_MIPS: ${{ matrix.mips }}
+          OUTPUT: dist/rule-bot-client-${{ matrix.label }}
+          VERSION: ci
+          COMMIT: ${{ github.sha }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: sh scripts/build-one.sh
+
+  container:
+    name: Container smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build local image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: rule-bot-client:ci
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=1970-01-01T00:00:00Z
+
+      - name: Verify image identity and compressed size
+        run: |
+          docker run --rm rule-bot-client:ci --version | grep -F "commit=${GITHUB_SHA}"
+          docker image save rule-bot-client:ci | gzip -9 > rule-bot-client-image.tar.gz
+          test "$(wc -c < rule-bot-client-image.tar.gz)" -le 10485760
+
+      - name: Verify locked-down persistent-volume startup
+        run: |
+          install -d -m 0750 smoke-data
+          printf '%s\n' '{"version":1,"output":"/data/domains.txt","flush_interval":"50ms","instances":[{"name":"unreachable","url":"http://127.0.0.1:9","reconnect":{"initial_delay":"50ms","max_delay":"50ms"}}]}' > smoke-data/config.json
+          sudo chown -R 10001:10001 smoke-data
+          docker run -d --name rule-bot-client-smoke --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci
+          sleep 2
+          test "$(docker inspect -f '{{.State.Running}}' rule-bot-client-smoke)" = true
+          docker stop -t 10 rule-bot-client-smoke
+          sudo test -f smoke-data/domains.txt
+
+      - name: Print container logs on failure
+        if: failure()
+        run: docker logs rule-bot-client-smoke 2>&1 || true
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f rule-bot-client-smoke >/dev/null 2>&1 || true

@@ -1,0 +1,251 @@
+name: OpenWrt Packages
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Go, LuCI, ucode and initialization tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Install static validators
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake gettext jq libjson-c-dev shellcheck
+
+      - name: Build pinned host ucode compiler
+        run: |
+          git init /tmp/ucode
+          git -C /tmp/ucode remote add origin https://github.com/jow-/ucode.git
+          git -C /tmp/ucode fetch --depth=1 origin 81205a25437a83e3b9e1eb55ac169be84453d53b
+          git -C /tmp/ucode checkout --detach FETCH_HEAD
+          cmake -S /tmp/ucode -B /tmp/ucode/build \
+            -DDEBUG_SUPPORT=OFF -DFS_SUPPORT=OFF -DIO_SUPPORT=OFF -DMATH_SUPPORT=OFF \
+            -DRESOLV_SUPPORT=OFF -DSTRUCT_SUPPORT=OFF -DLOG_SUPPORT=OFF -DSOCKET_SUPPORT=OFF \
+            -DZLIB_SUPPORT=OFF -DDIGEST_SUPPORT=OFF
+          cmake --build /tmp/ucode/build --target ucode --parallel 2
+          /tmp/ucode/build/ucode -cdynlink=fs -o /dev/null openwrt/package/luci-app-rule-bot-client/files/usr/share/rpcd/ucode/luci.rule_bot_client
+
+      - name: Validate source, races, scripts, LuCI and package contract
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          go test -count=1 ./...
+          go test -race -count=1 ./...
+          sh scripts/test-openwrt-static.sh
+          shellcheck scripts/build-openwrt-helper.sh scripts/assert-openwrt-package.sh scripts/test-openwrt-static.sh \
+            openwrt/package/luci-app-rule-bot-client/files/etc/init.d/rule-bot-client \
+            openwrt/package/luci-app-rule-bot-client/files/etc/rule-bot-client/recover.sh
+
+  package:
+    name: ${{ matrix.manager }} ${{ matrix.target }}/${{ matrix.subtarget }} (${{ matrix.package_arch }})
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - manager: ipk
+            release: 24.10.4
+            target: x86
+            subtarget: "64"
+            package_arch: x86_64
+            goarch: amd64
+          - manager: ipk
+            release: 24.10.4
+            target: armsr
+            subtarget: armv8
+            package_arch: aarch64_generic
+            goarch: arm64
+          - manager: ipk
+            release: 24.10.4
+            target: ath79
+            subtarget: generic
+            package_arch: mips_24kc
+            goarch: mips
+            gomips: softfloat
+          - manager: ipk
+            release: 24.10.4
+            target: ramips
+            subtarget: mt7621
+            package_arch: mipsel_24kc
+            goarch: mipsle
+            gomips: softfloat
+          - manager: apk
+            release: 25.12.0
+            target: x86
+            subtarget: "64"
+            package_arch: x86_64
+            goarch: amd64
+          - manager: apk
+            release: 25.12.0
+            target: armsr
+            subtarget: armv8
+            package_arch: aarch64_generic
+            goarch: arm64
+          - manager: apk
+            release: 25.12.0
+            target: ath79
+            subtarget: generic
+            package_arch: mips_24kc
+            goarch: mips
+            gomips: softfloat
+          - manager: apk
+            release: 25.12.0
+            target: ramips
+            subtarget: mt7621
+            package_arch: mipsel_24kc
+            goarch: mipsle
+            gomips: softfloat
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Install SDK extraction tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends jq zstd
+
+      - name: Resolve version and official SDK
+        id: identity
+        env:
+          RELEASE: ${{ matrix.release }}
+          TARGET: ${{ matrix.target }}
+          SUBTARGET: ${{ matrix.subtarget }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.1.0_git${GITHUB_RUN_ID}"
+          fi
+          base="https://downloads.openwrt.org/releases/${RELEASE}/targets/${TARGET}/${SUBTARGET}"
+          curl --fail --location --retry 3 --output sha256sums "${base}/sha256sums"
+          sdk=$(awk '{name=$2; sub(/^\*/, "", name); print name}' sha256sums | grep -E '^openwrt-sdk-.*\.Linux-x86_64\.tar\.zst$' | head -1)
+          test -n "$sdk"
+          expected=$(awk -v name="$sdk" '{file=$2; sub(/^\*/, "", file); if (file == name) print $1}' sha256sums)
+          test -n "$expected"
+          {
+            echo "version=$version"
+            echo "sdk=$sdk"
+            echo "sdk_url=${base}/${sdk}"
+            echo "sdk_sha256=$expected"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify official OpenWrt SDK
+        env:
+          SDK_URL: ${{ steps.identity.outputs.sdk_url }}
+          SDK_SHA256: ${{ steps.identity.outputs.sdk_sha256 }}
+        run: |
+          curl --fail --location --retry 3 --output sdk.tar.zst "$SDK_URL"
+          printf '%s  %s\n' "$SDK_SHA256" sdk.tar.zst | sha256sum -c -
+          tar --zstd -xf sdk.tar.zst
+          sdk_dir=$(find "$PWD" -maxdepth 1 -type d -name 'openwrt-sdk-*' -print -quit)
+          test -n "$sdk_dir"
+          echo "SDK_DIR=$sdk_dir" >> "$GITHUB_ENV"
+
+      - name: Cross-compile Rule-Bot Client and OpenWrt backend
+        env:
+          TARGET_ARCH: ${{ matrix.goarch }}
+          TARGET_MIPS: ${{ matrix.gomips }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          COMMIT: ${{ github.sha }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: |
+          OUTPUT=build/rule-bot-client sh scripts/build-one.sh
+          OUTPUT=build/rule-bot-client-openwrt sh scripts/build-openwrt-helper.sh
+          strings build/rule-bot-client | grep -F -m1 "$GITHUB_SHA"
+          strings build/rule-bot-client-openwrt | grep -F -m1 "$GITHUB_SHA"
+
+      - name: Build with the matching OpenWrt package chain
+        env:
+          RULE_BOT_CLIENT_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          (
+            cd "$SDK_DIR"
+            ./scripts/feeds update luci
+            git -C feeds/luci rev-parse HEAD
+            make -C feeds/luci/modules/luci-base/src po2lmo CC=cc
+            install -D -m 0755 feeds/luci/modules/luci-base/src/po2lmo staging_dir/hostpkg/bin/po2lmo
+          )
+          cp -a openwrt/package/luci-app-rule-bot-client "$SDK_DIR/package/luci-app-rule-bot-client"
+          mkdir -p "$SDK_DIR/package/luci-app-rule-bot-client/src"
+          install -m 0755 build/rule-bot-client "$SDK_DIR/package/luci-app-rule-bot-client/src/rule-bot-client"
+          install -m 0755 build/rule-bot-client-openwrt "$SDK_DIR/package/luci-app-rule-bot-client/src/rule-bot-client-openwrt"
+          printf '%s\n' 'CONFIG_PACKAGE_luci-app-rule-bot-client=y' >> "$SDK_DIR/.config"
+          make -C "$SDK_DIR" defconfig RULE_BOT_CLIENT_VERSION="$RULE_BOT_CLIENT_VERSION"
+          test -x "$SDK_DIR/staging_dir/hostpkg/bin/po2lmo"
+          make -C "$SDK_DIR" package/luci-app-rule-bot-client/compile V=s RULE_BOT_CLIENT_VERSION="$RULE_BOT_CLIENT_VERSION"
+
+      - name: Assert manager, architecture and package contents
+        env:
+          MANAGER: ${{ matrix.manager }}
+          EXPECTED_ARCH: ${{ matrix.package_arch }}
+        run: |
+          mkdir -p artifact
+          package=$(find "$SDK_DIR/bin" -type f -name "luci-app-rule-bot-client*.${MANAGER}" -print -quit)
+          test -n "$package"
+          cp "$package" artifact/
+          if [[ "$MANAGER" == apk ]]; then
+            apk_tool=$(find "$SDK_DIR/staging_dir" -type f -path '*/bin/apk' -perm -u+x -print -quit)
+            test -n "$apk_tool"
+            APK_TOOL="$apk_tool" sh scripts/assert-openwrt-package.sh apk "$package" "$EXPECTED_ARCH"
+          else
+            sh scripts/assert-openwrt-package.sh ipk "$package" "$EXPECTED_ARCH"
+          fi
+          package_name=$(basename "$package")
+          package_sha256=$(sha256sum "artifact/$package_name" | awk '{print $1}')
+          package_size=$(wc -c < "artifact/$package_name")
+          jq -n \
+            --arg workflow_run "$GITHUB_RUN_ID" \
+            --arg head_sha "$GITHUB_SHA" \
+            --arg manager "$MANAGER" \
+            --arg package_arch "$EXPECTED_ARCH" \
+            --arg package "$package_name" \
+            --arg package_sha256 "$package_sha256" \
+            --argjson package_size "$package_size" \
+            --arg sdk_url "${{ steps.identity.outputs.sdk_url }}" \
+            --arg sdk_sha256 "${{ steps.identity.outputs.sdk_sha256 }}" \
+            '{workflow_run:$workflow_run,head_sha:$head_sha,manager:$manager,package_arch:$package_arch,package:$package,size:$package_size,sha256:$package_sha256,sdk_url:$sdk_url,sdk_sha256:$sdk_sha256}' \
+            > artifact/manifest.json
+          cat artifact/manifest.json
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: luci-app-rule-bot-client-${{ matrix.manager }}-${{ matrix.package_arch }}
+          path: artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attest package
+        uses: actions/attest-build-provenance@8beda2b7ed98355c0e97c0a63bec38ae472e66c4 # v4.0.0
+        with:
+          subject-path: artifact/*.${{ matrix.manager }}

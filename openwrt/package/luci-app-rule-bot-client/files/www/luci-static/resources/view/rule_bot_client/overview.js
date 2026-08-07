@@ -1,0 +1,54 @@
+'use strict';
+'require view';
+'require poll';
+'require ui';
+'require rule_bot_client.api as api';
+
+function statusTable(status) {
+	const runtime = status.runtime || {};
+	const instances = runtime.instances || {};
+	const displayNames = {};
+	((status.config && status.config.sources) || []).forEach(function(source) { displayNames[source.id] = source.name; });
+	const rows = Object.keys(instances).sort().map(function(id) {
+		const item = instances[id];
+		return E('tr', { class: 'tr' }, [
+			E('td', { class: 'td' }, displayNames[id] || item.name || id),
+			E('td', { class: 'td' }, item.connected ? _('Connected') : _('Disconnected')),
+			E('td', { class: 'td' }, String(item.captured_events || 0)),
+			E('td', { class: 'td' }, item.last_event_at || '-'),
+			E('td', { class: 'td' }, item.recent_error || '-')
+		]);
+	});
+	return E('div', {}, [
+		E('h3', {}, _('Service status')),
+		E('div', { class: 'cbi-section-node' }, [
+			E('p', {}, [ E('strong', {}, _('Service status') + ': '), status.service === 'running' ? _('Running') : _('Stopped') ]),
+			E('p', {}, [ E('strong', {}, _('Storage') + ': '), (status.storage && status.storage.path) || status.config.storage.mode ]),
+			E('p', {}, [ E('strong', {}, _('Output') + ': '), status.output && status.output.exists ? String(status.output.bytes || 0) + ' ' + _('bytes') : '-' ])
+		]),
+		E('div', { class: 'table' }, [
+			E('tr', { class: 'tr table-titles' }, [ E('th', { class: 'th' }, _('Instance')), E('th', { class: 'th' }, _('State')), E('th', { class: 'th' }, _('Events')), E('th', { class: 'th' }, _('Last event')), E('th', { class: 'th' }, _('Recent error')) ])
+		].concat(rows.length ? rows : [ E('tr', { class: 'tr' }, E('td', { class: 'td', colspan: 5 }, _('No runtime status yet'))) ]))
+	]);
+}
+
+return view.extend({
+	load: function() { return api.status(); },
+	render: function(status) {
+		const container = E('div', {}, [ E('h2', {}, 'Rule-Bot Client - ' + _('Overview')), statusTable(status) ]);
+		poll.add(function() {
+			return api.status().then(function(fresh) {
+				container.replaceChildren(E('h2', {}, 'Rule-Bot Client - ' + _('Overview')), statusTable(fresh));
+			}).catch(api.notifyError);
+		}, 5);
+		container.appendChild(E('div', { class: 'cbi-page-actions' }, [
+			E('button', { class: 'btn cbi-button-action', click: function() { return api.service('reload').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Reload')),
+			' ',
+			E('button', { class: 'btn cbi-button-positive', click: function() { return api.service('restart').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Restart'))
+		]));
+		return container;
+	},
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});
