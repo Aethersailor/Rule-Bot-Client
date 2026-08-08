@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,7 +54,7 @@ func TestRuleBotSenderReducesAndDeduplicatesBeforeNetwork(t *testing.T) {
 	defer sender.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var logs bytes.Buffer
+	var logs lockedBuffer
 	result := make(chan error, 1)
 	go func() { result <- sender.Run(ctx, log.New(&logs, "", 0)) }()
 	writes := make(chan string, 2)
@@ -298,6 +300,64 @@ func TestRuleBotSenderSkipsExistingOutputByDefault(t *testing.T) {
 	if sender.offset != int64(len("old.example\n")) {
 		t.Fatalf("offset = %d", sender.offset)
 	}
+}
+
+func TestRuleBotDeliveryLogDoesNotExposeEndpoint(t *testing.T) {
+	const endpoint = "https://private-rule-bot.example/api/private/hidden-path"
+	sender := &ruleBotSender{
+		config: RuleBotConfig{
+			Endpoint: endpoint,
+			Token:    "test-token",
+			Retry: ReconnectConfig{
+				InitialDelay: Duration(10 * time.Millisecond),
+				MaxDelay:     Duration(20 * time.Millisecond),
+			},
+		},
+		client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("connection refused")
+		})},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var logs lockedBuffer
+	result := make(chan error, 1)
+	go func() {
+		result <- sender.deliverUntilTerminal(ctx, log.New(&logs, "", 0), "example.com")
+	}()
+	deadline := time.Now().Add(time.Second)
+	for !strings.Contains(logs.String(), "delivery_failed=") && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(logs.String(), "private-rule-bot.example") || strings.Contains(logs.String(), "/api/private/hidden-path") || !strings.Contains(logs.String(), "delivery_failed=network_error") {
+		t.Fatalf("delivery log exposed endpoint: %q", logs.String())
+	}
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	bytes.Buffer
+}
+
+func (buffer *lockedBuffer) Write(data []byte) (int, error) {
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+	return buffer.Buffer.Write(data)
+}
+
+func (buffer *lockedBuffer) String() string {
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+	return buffer.Buffer.String()
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }
 
 func waitForRuleBotOffset(t *testing.T, path string, want int64) {

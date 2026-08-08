@@ -64,6 +64,9 @@ func (b Backend) createBackup() ([]byte, error) {
 }
 
 func addBackupPath(writer *tar.Writer, root, logical, archiveName string) error {
+	if strings.HasSuffix(filepath.Base(logical), ".dedupe-cache") {
+		return nil
+	}
 	path := rooted(root, logical)
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {

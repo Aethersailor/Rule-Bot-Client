@@ -62,6 +62,9 @@ port: 7895
 	if err != nil {
 		t.Fatal(err)
 	}
+	if generated.Config.RuntimeCacheDir != "/etc/rule-bot-client/cache" {
+		t.Fatalf("runtime cache directory = %q", generated.Config.RuntimeCacheDir)
+	}
 	if len(generated.Config.Instances) != 3 {
 		t.Fatalf("instances = %+v", generated.Config.Instances)
 	}
@@ -247,6 +250,7 @@ func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeRootFile(t, sourceRoot, "/etc/rule-bot-client/data/domains.txt", "preserved.example\n")
+	writeRootFile(t, sourceRoot, "/etc/rule-bot-client/data/domains.txt.dedupe-cache", strings.Repeat("x", maxBackupBytes+1))
 	backup, err := sourceBackend.backup()
 	if err != nil {
 		t.Fatal(err)
@@ -330,6 +334,82 @@ func TestRuntimeStatusFreshnessRequiresCurrentProcess(t *testing.T) {
 	staleUpdate := fmt.Sprintf(`{"started_at":%q,"updated_at":%q}`, now.Add(-500*time.Millisecond).Format(time.RFC3339Nano), now.Add(-time.Minute).Format(time.RFC3339Nano))
 	if runtimeStatusIsFresh([]byte(staleUpdate), startedAfter, now) {
 		t.Fatal("stale update was accepted")
+	}
+}
+
+func TestReadRPCDoesNotExposeRuleBotEndpointOrProxyCredentials(t *testing.T) {
+	root := t.TempDir()
+	writeRootFile(t, root, "/etc/config/rule_bot_client", `config main 'main'
+	option schema_version '1'
+	option enabled '1'
+	option work_mode 'rulebot'
+	option domain_mode 'registrable_domain'
+	option flush_interval '5s'
+	option storage_mode 'persistent'
+
+config source 'openclash'
+	option type 'openclash'
+	option enabled '1'
+	option name 'OpenClash'
+
+config rule_bot 'rule_bot'
+	option enabled '1'
+	option endpoint 'https://private-rule-bot.example/api/private/hidden-path'
+	option proxy_url 'http://proxy-user:proxy-password@127.0.0.1:7890'
+`)
+	writeRootFile(t, root, ruleBotTokenPath(), "existing-token\n")
+
+	backend := Backend{Root: root, Testing: true}
+	result, err := backend.Dispatch(context.Background(), "config", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := result.(Settings)
+	if settings.RuleBot.Endpoint != "" || settings.RuleBot.ProxyURL != "" {
+		t.Fatalf("read config exposed Rule-Bot settings: endpoint=%q proxy=%q", settings.RuleBot.Endpoint, settings.RuleBot.ProxyURL)
+	}
+
+	result, err = backend.Dispatch(context.Background(), "status", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := result.(ServiceStatus)
+	if status.Config.RuleBot.Endpoint != "" || status.Config.RuleBot.ProxyURL != "" {
+		t.Fatalf("read status exposed Rule-Bot settings: endpoint=%q proxy=%q", status.Config.RuleBot.Endpoint, status.Config.RuleBot.ProxyURL)
+	}
+	status.Config.Enabled = false
+	if _, err := backend.save(context.Background(), status.Config); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := LoadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" || stored.RuleBot.ProxyURL != "http://proxy-user:proxy-password@127.0.0.1:7890" {
+		t.Fatalf("redacted status round trip changed sensitive settings: endpoint=%q proxy=%q", stored.RuleBot.Endpoint, stored.RuleBot.ProxyURL)
+	}
+
+	result, err = backend.Dispatch(context.Background(), "config_edit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	editable := result.(Settings)
+	if editable.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" {
+		t.Fatalf("write-authorized editor endpoint = %q", editable.RuleBot.Endpoint)
+	}
+	if editable.RuleBot.ProxyURL != "http://127.0.0.1:7890" || !editable.RuleBot.ProxyCredentialsSet {
+		t.Fatalf("write-authorized editor proxy = %q credentials_set=%t", editable.RuleBot.ProxyURL, editable.RuleBot.ProxyCredentialsSet)
+	}
+	editable.Enabled = false
+	if _, err := backend.save(context.Background(), editable); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = LoadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" || stored.RuleBot.ProxyURL != "http://proxy-user:proxy-password@127.0.0.1:7890" {
+		t.Fatalf("editor round trip changed sensitive settings: endpoint=%q proxy=%q", stored.RuleBot.Endpoint, stored.RuleBot.ProxyURL)
 	}
 }
 

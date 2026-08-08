@@ -60,12 +60,15 @@ function download(filename, content, mime) {
 	setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
+calls.configEdit = rpc.declare({ object: 'luci.rule_bot_client', method: 'config_edit' });
+
 return baseclass.extend({
 	notifyError: notifyError,
 	errorNodes: errorNodes,
 	detailNode: detailNode,
 	download: download,
 	config: function() { return checked(calls.config()); },
+	configEdit: function() { return checked(calls.configEdit()); },
 	status: function() { return checked(calls.status()); },
 	probe: function(id) { return checked(calls.probe(id)); },
 	domains: function(query, offset, limit) { return checked(calls.domains(query || '', offset || 0, limit || 100)); },

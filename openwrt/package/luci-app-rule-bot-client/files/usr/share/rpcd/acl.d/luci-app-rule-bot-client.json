@@ -8,7 +8,7 @@
 		},
 		"write": {
 			"ubus": {
-				"luci.rule_bot_client": [ "save", "clear", "backup", "restore", "service" ]
+				"luci.rule_bot_client": [ "config_edit", "save", "clear", "backup", "restore", "service" ]
 			}
 		}
 	}

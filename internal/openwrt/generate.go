@@ -26,7 +26,8 @@ func buildRuntimeConfig(root string, settings Settings) (generatedConfig, error)
 	if err != nil {
 		return generatedConfig{}, err
 	}
-	if err := ensureRuntimeDirectories(root, dataDir); err != nil {
+	cacheDir := runtimeCacheDir(settings.Storage, dataDir)
+	if err := ensureRuntimeDirectories(root, dataDir, cacheDir); err != nil {
 		return generatedConfig{}, err
 	}
 	discovered, err := discoverSources(root, settings)
@@ -37,6 +38,7 @@ func buildRuntimeConfig(root string, settings Settings) (generatedConfig, error)
 		Version:                  client.ConfigVersion,
 		Output:                   filepath.ToSlash(filepath.Join(dataDir, "domains.txt")),
 		StatusFile:               "/var/run/rule-bot-client/status/status.json",
+		RuntimeCacheDir:          cacheDir,
 		DomainMode:               client.DomainMode(settings.DomainMode),
 		FlushInterval:            client.Duration(mustDuration(settings.FlushInterval)),
 		IncludeFailedConnections: settings.IncludeFailedConnections,
@@ -118,7 +120,18 @@ func externalMounted(root, path string) bool {
 	return false
 }
 
-func ensureRuntimeDirectories(root, dataDir string) error {
+func runtimeCacheDir(storage Storage, dataDir string) string {
+	switch storage.Mode {
+	case StoragePersistent:
+		return "/etc/rule-bot-client/cache"
+	case StorageTemporary:
+		return "/tmp/rule-bot-client/cache"
+	default:
+		return filepath.ToSlash(filepath.Join(dataDir, ".rule-bot-client-cache"))
+	}
+}
+
+func ensureRuntimeDirectories(root, dataDir, cacheDir string) error {
 	paths := []struct {
 		path  string
 		mode  os.FileMode
@@ -129,6 +142,7 @@ func ensureRuntimeDirectories(root, dataDir string) error {
 		{"/etc/rule-bot-client/credentials", 0o750, 0},
 		{"/etc/rule-bot-client/certs", 0o750, 0},
 		{dataDir, 0o750, 65534},
+		{cacheDir, 0o750, 65534},
 	}
 	for _, item := range paths {
 		path := rooted(root, item.path)

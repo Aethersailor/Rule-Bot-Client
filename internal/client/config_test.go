@@ -175,6 +175,25 @@ func TestLoadConfigRejectsUnsafeRuleBotConfiguration(t *testing.T) {
 	}
 }
 
+func TestRuleBotURLValidationErrorsDoNotEchoPrivateAddresses(t *testing.T) {
+	for name, ruleBot := range map[string]string{
+		"endpoint": `{"enabled":true,"endpoint":"https://private-rule-bot.example/private/%zz","token":"x"}`,
+		"proxy":    `{"enabled":true,"endpoint":"https://rule-bot.example/hidden","token":"x","proxy_url":"http://proxy-user:proxy-password@private-proxy.example/%zz"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := `{"version":1,"output":"domains.txt","instances":[{"name":"home","url":"http://127.0.0.1:9090"}],"rule_bot":` + ruleBot + `}`
+			path := writeTestConfig(t, t.TempDir(), input)
+			_, err := LoadConfig(path)
+			if err == nil {
+				t.Fatal("LoadConfig() succeeded")
+			}
+			if strings.Contains(err.Error(), "private-rule-bot.example") || strings.Contains(err.Error(), "private-proxy.example") || strings.Contains(err.Error(), "proxy-password") {
+				t.Fatalf("validation error exposed private address: %v", err)
+			}
+		})
+	}
+}
+
 func writeTestConfig(t *testing.T, directory, contents string) string {
 	t.Helper()
 	path := filepath.Join(directory, "config.json")

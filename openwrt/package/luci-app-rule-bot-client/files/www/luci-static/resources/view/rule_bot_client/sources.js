@@ -12,7 +12,7 @@ function clone(value) {
 }
 
 return view.extend({
-	load: function() { return Promise.all([ api.config(), api.status() ]); },
+	load: function() { return Promise.all([ api.configEdit(), api.status() ]); },
 
 	saveAll: function() {
 		return api.save(this.settings).then(function() {

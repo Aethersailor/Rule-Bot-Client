@@ -13,7 +13,7 @@ function row(label, control, description) {
 function option(value, text) { return E('option', { value: value }, text); }
 
 return view.extend({
-	load: function() { return api.config(); },
+	load: function() { return api.configEdit(); },
 	render: function(settings) {
 		const enabled = E('input', { type: 'checkbox' });
 		enabled.checked = settings.enabled !== false;
@@ -29,7 +29,7 @@ return view.extend({
 		const clearToken = E('input', { type: 'checkbox' });
 		const sendExisting = E('input', { type: 'checkbox' });
 		sendExisting.checked = !!settings.rule_bot.send_existing;
-		const proxy = E('input', { class: 'cbi-input-text', value: settings.rule_bot.proxy_url || '', placeholder: _('Optional') + ': http://127.0.0.1:7890' });
+		const proxy = E('input', { class: 'cbi-input-text', value: settings.rule_bot.proxy_url || '', placeholder: _('Optional') + ': http://127.0.0.1:7890', input: function() { settings.rule_bot.proxy_credentials_set = false; } });
 		const flush = E('input', { class: 'cbi-input-text', value: settings.flush_interval || '5s' });
 		const save = function() {
 			settings.enabled = enabled.checked;

@@ -98,7 +98,7 @@ func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
 	return token, nil
 }
 
-func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore) (*ruleBotSender, error) {
+func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore, configuredCachePath ...string) (*ruleBotSender, error) {
 	if _, err := resolveRuleBotToken(cfg); err != nil {
 		return nil, err
 	}
@@ -140,13 +140,18 @@ func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore)
 			return fail(err)
 		}
 	}
-	delivered, err := loadDeliveredRuleBotDomains(file, state.Offset, cfg)
+	cachePath := cfg.StateFile + ".dedupe-cache"
+	if len(configuredCachePath) != 0 && configuredCachePath[0] != "" {
+		cachePath = configuredCachePath[0]
+	}
+	delivered, err := loadDeliveredRuleBotDomains(file, state.Offset, cfg, cachePath)
 	if err != nil {
 		return fail(err)
 	}
 
 	transport, err := buildRuleBotTransport(cfg)
 	if err != nil {
+		_ = delivered.Close()
 		return fail(err)
 	}
 	return &ruleBotSender{
@@ -171,7 +176,7 @@ func buildRuleBotTransport(cfg RuleBotConfig) (*http.Transport, error) {
 	case cfg.ProxyURL != "":
 		parsed, err := url.Parse(cfg.ProxyURL)
 		if err != nil {
-			return nil, fmt.Errorf("parse proxy_url: %w", err)
+			return nil, errors.New("proxy_url is not a valid URL")
 		}
 		proxy = http.ProxyURL(parsed)
 	case cfg.ProxyFromEnvironment:
@@ -195,25 +200,31 @@ func buildRuleBotTransport(cfg RuleBotConfig) (*http.Transport, error) {
 	}, nil
 }
 
-func loadDeliveredRuleBotDomains(file *os.File, offset int64, cfg RuleBotConfig) (*fingerprintSet, error) {
-	delivered := newFingerprintSet(1024)
+func loadDeliveredRuleBotDomains(file *os.File, offset int64, cfg RuleBotConfig, cachePath string) (*fingerprintSet, error) {
+	delivered := newFingerprintSetAt(1024, cachePath)
+	fail := func(err error) (*fingerprintSet, error) {
+		_ = delivered.Close()
+		return nil, err
+	}
 	historical := cfg
 	historical.Privacy.ExcludeSuffixes = nil
 	historical.Privacy.ExcludeFile = ""
 	for current := int64(0); current < offset; {
 		raw, next, ready, err := readDurableDomain(file, current, offset)
 		if err != nil {
-			return nil, fmt.Errorf("load delivered Rule-Bot domains: %w", err)
+			return fail(fmt.Errorf("load delivered Rule-Bot domains: %w", err))
 		}
 		if !ready {
-			return nil, errors.New("load delivered Rule-Bot domains: incomplete state boundary")
+			return fail(errors.New("load delivered Rule-Bot domains: incomplete state boundary"))
 		}
 		domain, _, err := prepareRuleBotDomain(raw, historical)
 		if err != nil {
-			return nil, err
+			return fail(err)
 		}
 		if domain != "" {
-			delivered.Add(domain)
+			if _, err := delivered.Add(domain); err != nil {
+				return fail(fmt.Errorf("index delivered Rule-Bot domain: %w", err))
+			}
 		}
 		current = next
 	}
@@ -224,7 +235,7 @@ func (s *ruleBotSender) Close() error {
 	if transport, ok := s.client.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
-	return s.file.Close()
+	return errors.Join(s.file.Close(), s.delivered.Close())
 }
 
 func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
@@ -257,7 +268,9 @@ func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
 				domainReference(rawDomain),
 				localStatus,
 			)
-		} else if !s.delivered.Add(domain) {
+		} else if added, err := s.delivered.Add(domain); err != nil {
+			return fmt.Errorf("index delivered Rule-Bot domain: %w", err)
+		} else if !added {
 			logger.Printf(
 				"INFO rule_bot domain_ref=%s local_status=duplicate_registrable_domain",
 				domainReference(domain),
@@ -294,12 +307,12 @@ func (s *ruleBotSender) deliverUntilTerminal(ctx context.Context, logger *log.Lo
 		if ctx.Err() != nil {
 			return nil
 		}
-		errorText := err.Error()
+		errorText := ruleBotDeliveryLogReason(err)
 		if errorText != lastError || time.Since(lastErrorLog) >= 5*time.Minute {
 			logger.Printf(
-				"WARN rule_bot domain_ref=%s delivery_failed=%v",
+				"WARN rule_bot domain_ref=%s delivery_failed=%s",
 				domainReference(domain),
-				err,
+				errorText,
 			)
 			lastError = errorText
 			lastErrorLog = time.Now()
@@ -319,6 +332,37 @@ func (s *ruleBotSender) deliverUntilTerminal(ctx context.Context, logger *log.Lo
 			}
 		}
 	}
+}
+
+func ruleBotDeliveryLogReason(err error) string {
+	var deliveryError *ruleBotDeliveryError
+	if !errors.As(err, &deliveryError) {
+		return "delivery_error"
+	}
+	if deliveryError.auth {
+		if deliveryError.statusCode == http.StatusUnauthorized || deliveryError.statusCode == http.StatusForbidden {
+			return "authentication_failed"
+		}
+		return "credential_error"
+	}
+	if deliveryError.statusCode != 0 {
+		return fmt.Sprintf("http_status_%d", deliveryError.statusCode)
+	}
+	var urlError *url.Error
+	if errors.As(deliveryError.err, &urlError) {
+		if urlError.Timeout() {
+			return "network_timeout"
+		}
+		return "network_error"
+	}
+	var networkError net.Error
+	if errors.As(deliveryError.err, &networkError) {
+		if networkError.Timeout() {
+			return "network_timeout"
+		}
+		return "network_error"
+	}
+	return "response_error"
 }
 
 func (s *ruleBotSender) deliver(ctx context.Context, domain string) (string, error) {

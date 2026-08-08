@@ -7,7 +7,7 @@ import { chmod, error as fs_error, popen, readfile, writefile, unlink } from 'fs
 const helper = '/usr/libexec/rule-bot-client-openwrt';
 const request_dir = '/var/run/rule-bot-client/rpc';
 const allowed_actions = {
-	config: true, status: true, probe: true, domains: true, export: true,
+	config: true, config_edit: true, status: true, probe: true, domains: true, export: true,
 	logs: true, backup: true, upgrade: true, save: true, clear: true,
 	restore: true, service: true
 };
@@ -42,6 +42,7 @@ function invoke(action, args) {
 
 const methods = {
 	config: { call: function() { return invoke('config', {}); } },
+	config_edit: { call: function() { return invoke('config_edit', {}); } },
 	status: { call: function() { return invoke('status', {}); } },
 	probe: {
 		args: { id: 'id' },

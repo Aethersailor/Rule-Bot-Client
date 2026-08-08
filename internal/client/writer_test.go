@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,6 +9,30 @@ import (
 	"testing"
 	"time"
 )
+
+func TestOutputStoreStopsBeforeConsumingStorageReserve(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "domains.txt")
+	store, _, err := openOutput(path, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	reserveError := errors.New("storage reserve reached")
+	store.storageCheck = func(string, int64) error { return reserveError }
+	domains := make(chan string, 1)
+	domains <- "example.com"
+	close(domains)
+	if err := store.Run(domains); !errors.Is(err, reserveError) {
+		t.Fatalf("Run() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != 0 {
+		t.Fatalf("output was written after reserve failure: %q", data)
+	}
+}
 
 func TestOutputStoreWritesAndReloads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "domains.txt")
@@ -41,7 +66,10 @@ func TestOutputStoreWritesAndReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	duplicate := set.Add("example.com")
+	duplicate, err := set.Add("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if set.Len() != 2 || duplicate {
 		t.Fatalf("reloaded set length=%d duplicate=%v", set.Len(), duplicate)
 	}

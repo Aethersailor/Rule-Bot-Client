@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +36,11 @@ func (b Backend) Dispatch(ctx context.Context, action string, payload []byte) (a
 	}
 	switch action {
 	case "config":
-		return LoadSettings(b.Root)
+		settings, err := LoadSettings(b.Root)
+		return settingsForRead(settings), err
+	case "config_edit":
+		settings, err := LoadSettings(b.Root)
+		return settingsForEditor(settings), err
 	case "initialize":
 		return b.initialize()
 	case "generate":
@@ -147,11 +152,12 @@ func (b Backend) generate(ctx context.Context) (map[string]any, error) {
 }
 
 func (b Backend) save(ctx context.Context, settings Settings) (response SaveResponse, err error) {
-	if err := ValidateSettings(&settings); err != nil {
-		return response, err
-	}
 	existing, err := LoadSettings(b.Root)
 	if err != nil {
+		return response, err
+	}
+	reconcileSensitiveRuleBot(existing.RuleBot, &settings.RuleBot)
+	if err := ValidateSettings(&settings); err != nil {
 		return response, err
 	}
 	paths := affectedPaths(b.Root, existing, settings)
@@ -196,7 +202,46 @@ func (b Backend) save(ctx context.Context, settings Settings) (response SaveResp
 	removeOrphanCredentials(b.Root, existing, settings)
 	committed = true
 	settings, _ = LoadSettings(b.Root)
-	return SaveResponse{OK: true, Config: settings, Warnings: settings.Warnings}, nil
+	return SaveResponse{OK: true, Config: settingsForEditor(settings), Warnings: settings.Warnings}, nil
+}
+
+func settingsForRead(settings Settings) Settings {
+	settings.RuleBot.Endpoint = ""
+	settings.RuleBot.ProxyURL = ""
+	settings.RuleBot.SensitiveRedacted = true
+	settings.RuleBot.ProxyCredentialsSet = false
+	return settings
+}
+
+func settingsForEditor(settings Settings) Settings {
+	proxy, credentialsSet := proxyURLForEditor(settings.RuleBot.ProxyURL)
+	settings.RuleBot.ProxyURL = proxy
+	settings.RuleBot.SensitiveRedacted = false
+	settings.RuleBot.ProxyCredentialsSet = credentialsSet
+	return settings
+}
+
+func proxyURLForEditor(raw string) (string, bool) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.User == nil {
+		return raw, false
+	}
+	parsed.User = nil
+	return parsed.String(), true
+}
+
+func reconcileSensitiveRuleBot(existing RuleBot, submitted *RuleBot) {
+	if submitted.SensitiveRedacted {
+		submitted.Endpoint = existing.Endpoint
+		submitted.ProxyURL = existing.ProxyURL
+	} else if submitted.ProxyCredentialsSet {
+		visibleProxy, credentialsSet := proxyURLForEditor(existing.ProxyURL)
+		if credentialsSet && submitted.ProxyURL == visibleProxy {
+			submitted.ProxyURL = existing.ProxyURL
+		}
+	}
+	submitted.SensitiveRedacted = false
+	submitted.ProxyCredentialsSet = false
 }
 
 func affectedPaths(root string, oldSettings, newSettings Settings) []string {
@@ -427,7 +472,7 @@ func (b Backend) status() (ServiceStatus, error) {
 		return ServiceStatus{}, err
 	}
 	status := ServiceStatus{
-		Version: 1, GeneratedAt: time.Now().UTC(), Config: settings,
+		Version: 1, GeneratedAt: time.Now().UTC(), Config: settingsForRead(settings),
 		Service: "stopped", Adapters: map[string]AdapterStatus{}, Runtime: map[string]any{},
 		Output: map[string]any{}, RuleBot: map[string]any{"enabled": settings.RuleBot.Enabled}, Storage: map[string]any{"mode": settings.Storage.Mode},
 	}

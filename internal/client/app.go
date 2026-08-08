@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	rand "math/rand/v2"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -59,7 +60,13 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 		}
 	}
 
-	store, seen, err := openOutput(cfg.Output, cfg.FlushInterval.Value())
+	outputCachePath := ""
+	ruleBotCachePath := ""
+	if cfg.RuntimeCacheDir != "" {
+		outputCachePath = filepath.Join(cfg.RuntimeCacheDir, "domains.dedupe-cache")
+		ruleBotCachePath = filepath.Join(cfg.RuntimeCacheDir, "rulebot.dedupe-cache")
+	}
+	store, seen, err := openOutput(cfg.Output, cfg.FlushInterval.Value(), outputCachePath)
 	if err != nil {
 		return err
 	}
@@ -81,7 +88,7 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 
 	var sender *ruleBotSender
 	if cfg.RuleBot.Enabled {
-		sender, err = openRuleBotSender(cfg.RuleBot, cfg.Output, store)
+		sender, err = openRuleBotSender(cfg.RuleBot, cfg.Output, store, ruleBotCachePath)
 		if err != nil {
 			return fmt.Errorf("initialize Rule-Bot sender: %w", err)
 		}
@@ -114,16 +121,24 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 	}
 
 	var processor sync.WaitGroup
+	processorResult := make(chan error, 1)
 	processor.Add(1)
 	go func() {
 		defer processor.Done()
 		defer close(writes)
+		var processorErr error
+		defer func() { processorResult <- processorErr }()
 		for domain := range candidates {
 			domain, ok := projectDomain(domain, cfg.DomainMode)
 			if !ok {
 				continue
 			}
-			if !seen.Add(domain) {
+			added, err := seen.Add(domain)
+			if err != nil {
+				processorErr = fmt.Errorf("index captured domain: %w", err)
+				return
+			}
+			if !added {
 				continue
 			}
 			if reporter != nil {
@@ -149,6 +164,7 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 	var fatal error
 	writerConsumed := false
 	senderConsumed := false
+	processorConsumed := false
 	select {
 	case <-ctx.Done():
 		logger.Printf("INFO shutdown requested")
@@ -164,11 +180,23 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 		if err != nil {
 			logger.Printf("ERROR Rule-Bot sender failure: %v", err)
 		}
+	case err := <-processorResult:
+		processorConsumed = true
+		fatal = err
+		if err != nil {
+			logger.Printf("ERROR domain index failure: %v", err)
+		}
 	}
 	cancel()
 	readers.Wait()
 	close(candidates)
 	processor.Wait()
+	if !processorConsumed {
+		processorErr := <-processorResult
+		if fatal == nil {
+			fatal = processorErr
+		}
+	}
 	if !writerConsumed {
 		writerErr := <-writerResult
 		if fatal == nil {

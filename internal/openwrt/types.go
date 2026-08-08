@@ -57,14 +57,16 @@ type Source struct {
 }
 
 type RuleBot struct {
-	Enabled       bool   `json:"enabled"`
-	Endpoint      string `json:"endpoint,omitempty"`
-	Token         string `json:"token,omitempty"`
-	TokenSet      bool   `json:"token_set,omitempty"`
-	PreserveToken bool   `json:"preserve_token,omitempty"`
-	ClearToken    bool   `json:"clear_token,omitempty"`
-	SendExisting  bool   `json:"send_existing"`
-	ProxyURL      string `json:"proxy_url,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	Endpoint            string `json:"endpoint,omitempty"`
+	Token               string `json:"token,omitempty"`
+	TokenSet            bool   `json:"token_set,omitempty"`
+	PreserveToken       bool   `json:"preserve_token,omitempty"`
+	ClearToken          bool   `json:"clear_token,omitempty"`
+	SendExisting        bool   `json:"send_existing"`
+	ProxyURL            string `json:"proxy_url,omitempty"`
+	SensitiveRedacted   bool   `json:"sensitive_redacted,omitempty"`
+	ProxyCredentialsSet bool   `json:"proxy_credentials_set,omitempty"`
 }
 
 type AdapterStatus struct {

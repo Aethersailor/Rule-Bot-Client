@@ -46,6 +46,7 @@ type Config struct {
 	Version                  int              `json:"version"`
 	Output                   string           `json:"output"`
 	StatusFile               string           `json:"status_file,omitempty"`
+	RuntimeCacheDir          string           `json:"runtime_cache_dir,omitempty"`
 	DomainMode               DomainMode       `json:"domain_mode,omitempty"`
 	FlushInterval            Duration         `json:"flush_interval"`
 	IncludeFailedConnections bool             `json:"include_failed_connections"`
@@ -144,6 +145,15 @@ func (c *Config) validate(configDir string) error {
 		c.Output = filepath.Join(configDir, c.Output)
 	}
 	c.Output = filepath.Clean(c.Output)
+	if c.RuntimeCacheDir != "" {
+		if !filepath.IsAbs(c.RuntimeCacheDir) {
+			c.RuntimeCacheDir = filepath.Join(configDir, c.RuntimeCacheDir)
+		}
+		c.RuntimeCacheDir = filepath.Clean(c.RuntimeCacheDir)
+		if c.RuntimeCacheDir == c.Output {
+			return errors.New("runtime_cache_dir must be a directory separate from output")
+		}
+	}
 	if c.StatusFile != "" {
 		if !filepath.IsAbs(c.StatusFile) {
 			c.StatusFile = filepath.Join(configDir, c.StatusFile)
@@ -191,7 +201,7 @@ func (c *RuleBotConfig) validate(configDir, output string) error {
 	}
 	parsed, err := url.Parse(c.Endpoint)
 	if err != nil {
-		return fmt.Errorf("invalid endpoint: %w", err)
+		return errors.New("endpoint is not a valid URL")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return errors.New("endpoint scheme must be http or https")
@@ -209,7 +219,7 @@ func (c *RuleBotConfig) validate(configDir, output string) error {
 	if c.ProxyURL != "" {
 		proxyURL, err := url.Parse(c.ProxyURL)
 		if err != nil {
-			return fmt.Errorf("invalid proxy_url: %w", err)
+			return errors.New("proxy_url is not a valid URL")
 		}
 		switch proxyURL.Scheme {
 		case "http", "https", "socks5", "socks5h":

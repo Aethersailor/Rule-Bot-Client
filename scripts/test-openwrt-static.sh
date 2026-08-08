@@ -65,6 +65,10 @@ for file in "$root"/usr/share/rpcd/acl.d/*.json "$root"/usr/share/luci/menu.d/*.
   jq -e . "$file" >/dev/null
 done
 
+acl="$root/usr/share/rpcd/acl.d/luci-app-rule-bot-client.json"
+jq -e '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index("config_edit") | not' "$acl" >/dev/null
+jq -e '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index("config_edit") != null' "$acl" >/dev/null
+
 for file in "$root"/www/luci-static/resources/rule_bot_client/*.js "$root"/www/luci-static/resources/view/rule_bot_client/*.js; do
   node --check "$file" >/dev/null
 done
@@ -120,7 +124,7 @@ const Module = factory(rpc, ui, baseclass, { env: { lang: 'en' } }, element);
 if (typeof Module !== 'function')
   throw new Error('rule_bot_client.api must yield a LuCI constructor');
 const api = new Module();
-for (const method of [ 'config', 'status', 'probe', 'domains', 'save', 'clear', 'restore', 'service' ]) {
+for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'save', 'clear', 'restore', 'service' ]) {
   if (typeof api[method] !== 'function')
     throw new Error(`rule_bot_client.api is missing method ${method}`);
 }
