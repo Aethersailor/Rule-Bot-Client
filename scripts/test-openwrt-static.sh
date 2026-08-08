@@ -138,6 +138,67 @@ for (const method of [ 'config', 'status', 'probe', 'domains', 'save', 'clear', 
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 NODE
 
+node - "$root/www/luci-static/resources/view/rule_bot_client/overview.js" <<'NODE'
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const view = { extend: (methods) => methods };
+const poll = { add: () => {} };
+const ui = { addNotification: () => {} };
+let saved;
+let reloaded = false;
+const api = {
+  save: (settings) => { saved = settings; return Promise.resolve({ ok: true }); },
+  service: () => Promise.resolve({ ok: true }),
+  notifyError: (error) => { throw error; },
+  detailNode: () => ({})
+};
+function element(tag, attributes, children) {
+  if (children === undefined && (Array.isArray(attributes) || typeof attributes === 'string')) {
+    children = attributes;
+    attributes = {};
+  }
+  const listeners = {};
+  return {
+    tag, attributes: attributes || {}, children, listeners,
+    addEventListener: (name, handler) => { listeners[name] = handler; },
+    replaceChildren: () => {}
+  };
+}
+global.location = { reload: () => { reloaded = true; } };
+const factory = new Function('view', 'poll', 'ui', 'api', 'E', '_', source);
+const module = factory(view, poll, ui, api, element, (message) => message);
+const status = {
+  service: 'running', config: { enabled: true, sources: [], storage: { mode: 'persistent' } },
+  runtime: {}, output: {}, storage: {}
+};
+const rendered = module.render(status);
+function find(node, predicate) {
+  if (!node || typeof node !== 'object')
+    return null;
+  if (predicate(node))
+    return node;
+  const children = Array.isArray(node.children) ? node.children : [ node.children ];
+  for (const child of children) {
+    const match = find(child, predicate);
+    if (match)
+      return match;
+  }
+  return null;
+}
+const toggle = find(rendered, (node) => node.tag === 'input' && node.attributes.class === 'cbi-input-checkbox');
+if (!toggle || typeof toggle.listeners.change !== 'function' || toggle.checked !== true)
+  throw new Error('overview service master switch was not rendered as enabled');
+toggle.checked = false;
+Promise.resolve(toggle.listeners.change()).then(() => {
+  if (!saved || saved.enabled !== false)
+    throw new Error('overview service master switch did not persist disabled state');
+  if (status.config.enabled !== true)
+    throw new Error('overview service master switch mutated the polled status object');
+  if (!reloaded)
+    throw new Error('overview did not refresh after changing the service master switch');
+}).catch((error) => { console.error(error); process.exitCode = 1; });
+NODE
+
 sh -n "$root/etc/init.d/rule-bot-client"
 sh -n "$root/etc/rule-bot-client/recover.sh"
 

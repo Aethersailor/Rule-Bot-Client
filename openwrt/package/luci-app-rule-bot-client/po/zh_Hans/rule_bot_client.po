@@ -100,6 +100,9 @@ msgstr "删除此目标？已有域名与 Rule-Bot 状态会保留。"
 msgid "Disconnected"
 msgstr "未连接"
 
+msgid "Disabled"
+msgstr "已关闭"
+
 msgid "Discovery"
 msgstr "发现结果"
 
@@ -280,6 +283,15 @@ msgstr "密钥"
 msgid "Send existing domains"
 msgstr "发送已有域名"
 
+msgid "Service disabled"
+msgstr "服务已关闭"
+
+msgid "Service enabled"
+msgstr "服务已开启"
+
+msgid "Service master switch"
+msgstr "服务总开关"
+
 msgid "Service status"
 msgstr "服务状态"
 
@@ -321,6 +333,9 @@ msgstr "令牌（Token）"
 
 msgid "Token configured; leave empty to preserve"
 msgstr "已配置令牌；留空则保留"
+
+msgid "Turning this off saves the setting and stops the service. Turning it on validates the configuration and starts the service; the choice persists across reboot."
+msgstr "关闭会保存设置并停止服务；开启会校验配置并启动服务，路由器重启后仍保持该选择。"
 
 msgid "Upgrade identity"
 msgstr "升级身份"

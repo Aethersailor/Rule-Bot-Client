@@ -210,6 +210,33 @@ func TestInitializeCreatesOnlyNativeUCI(t *testing.T) {
 	}
 }
 
+func TestDisabledServicePersistsWithoutGeneratingRuntimeConfig(t *testing.T) {
+	root := t.TempDir()
+	settings := DefaultSettings()
+	settings.Enabled = false
+	backend := Backend{Root: root, Testing: true}
+	if _, err := backend.save(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Enabled {
+		t.Fatal("disabled service setting was not persisted")
+	}
+	generated, err := backend.generate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generated["enabled"] != false {
+		t.Fatalf("generate() = %#v", generated)
+	}
+	if _, err := os.Stat(rooted(root, "/var/run/rule-bot-client/config.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("disabled service generated a runtime config: %v", err)
+	}
+}
+
 func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 	sourceRoot := t.TempDir()
 	writeRootFile(t, sourceRoot, "/bin/opkg", "")

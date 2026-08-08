@@ -37,7 +37,7 @@ msgstr ""
 msgid "Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded."
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:27
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:29
 msgid "bytes"
 msgstr ""
 
@@ -89,7 +89,7 @@ msgstr ""
 msgid "Complete endpoint"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:16 files/www/luci-static/resources/view/rule_bot_client/sources.js:28
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:17 files/www/luci-static/resources/view/rule_bot_client/sources.js:28
 msgid "Connected"
 msgstr ""
 
@@ -121,7 +121,11 @@ msgstr ""
 msgid "Delete this target? Existing domains and Rule-Bot state will be kept."
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:16 files/www/luci-static/resources/view/rule_bot_client/sources.js:28
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:26
+msgid "Disabled"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:17 files/www/luci-static/resources/view/rule_bot_client/sources.js:28
 msgid "Disconnected"
 msgstr ""
 
@@ -145,15 +149,15 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/collection.js:54 files/www/luci-static/resources/view/rule_bot_client/sources.js:162 files/www/luci-static/resources/view/rule_bot_client/sources.js:164 files/www/luci-static/resources/view/rule_bot_client/sources.js:56
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:26 files/www/luci-static/resources/view/rule_bot_client/sources.js:162 files/www/luci-static/resources/view/rule_bot_client/sources.js:164 files/www/luci-static/resources/view/rule_bot_client/sources.js:56
 msgid "Enabled"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:19
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:20
 msgid "Error recorded"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:30
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Events"
 msgstr ""
 
@@ -165,7 +169,7 @@ msgstr ""
 msgid "External mount"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:42
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:91
 msgid "External storage"
 msgstr ""
 
@@ -185,11 +189,11 @@ msgstr ""
 msgid "incomplete"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:30
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Instance"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:30
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Last event"
 msgstr ""
 
@@ -233,7 +237,7 @@ msgstr ""
 msgid "No manual targets"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:31
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:33
 msgid "No runtime status yet"
 msgstr ""
 
@@ -261,11 +265,11 @@ msgstr ""
 msgid "Outbound proxy URL"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:27
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:29
 msgid "Output"
 msgstr ""
 
-#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/overview.js:50 files/www/luci-static/resources/view/rule_bot_client/overview.js:53
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/overview.js:78
 msgid "Overview"
 msgstr ""
 
@@ -281,11 +285,11 @@ msgstr ""
 msgid "Persistent /etc/rule-bot-client/data"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:40
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:89
 msgid "Persistent storage"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:30
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Recent error"
 msgstr ""
 
@@ -301,11 +305,11 @@ msgstr ""
 msgid "Registrable domain"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:57
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:69
 msgid "Reload"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:59
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:71
 msgid "Restart"
 msgstr ""
 
@@ -317,7 +321,7 @@ msgstr ""
 msgid "Restore this Rule-Bot Client backup and reload the service?"
 msgstr ""
 
-#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:53 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:50 files/www/luci-static/resources/view/rule_bot_client/overview.js:53 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:159
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:53 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:78 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:159
 msgid "Rule-Bot Client"
 msgstr ""
 
@@ -329,7 +333,7 @@ msgstr ""
 msgid "Rule-Bot is a single shared delivery state for all controller instances."
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:25
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:27
 msgid "Running"
 msgstr ""
 
@@ -365,7 +369,19 @@ msgstr ""
 msgid "Send existing domains"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:23 files/www/luci-static/resources/view/rule_bot_client/overview.js:25
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:50
+msgid "Service disabled"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:50
+msgid "Service enabled"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/collection.js:54 files/www/luci-static/resources/view/rule_bot_client/overview.js:26 files/www/luci-static/resources/view/rule_bot_client/overview.js:61
+msgid "Service master switch"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:24 files/www/luci-static/resources/view/rule_bot_client/overview.js:27
 msgid "Service status"
 msgstr ""
 
@@ -373,15 +389,15 @@ msgstr ""
 msgid "Skip certificate verification"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:30
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "State"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:25
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:27
 msgid "Stopped"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:26
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:28
 msgid "Storage"
 msgstr ""
 
@@ -401,7 +417,7 @@ msgstr ""
 msgid "Temporary /tmp/rule-bot-client/data"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:41
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:90
 msgid "Temporary storage"
 msgstr ""
 
@@ -423,6 +439,10 @@ msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/collection.js:28
 msgid "Token configured; leave empty to preserve"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/collection.js:54 files/www/luci-static/resources/view/rule_bot_client/overview.js:64
+msgid "Turning this off saves the setting and stops the service. Turning it on validates the configuration and starts the service; the choice persists across reboot."
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:152

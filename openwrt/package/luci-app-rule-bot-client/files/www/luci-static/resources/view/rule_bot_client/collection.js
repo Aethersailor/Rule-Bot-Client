@@ -51,7 +51,7 @@ return view.extend({
 		};
 		return E('div', {}, [
 			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Collection and Rule-Bot')),
-			row(_('Enabled'), enabled),
+			row(_('Service master switch'), enabled, _('Turning this off saves the setting and stops the service. Turning it on validates the configuration and starts the service; the choice persists across reboot.')),
 			row(_('Work mode'), workMode, _('Rule-Bot is a single shared delivery state for all controller instances.')),
 			row(_('Domain mode'), domainMode),
 			row(_('Flush interval'), flush),

@@ -184,7 +184,7 @@ opkg install ./luci-app-rule-bot-client_*.ipk
 apk add --allow-untrusted ./luci-app-rule-bot-client-*.apk
 ```
 
-安装后从“服务 → Rule-Bot Client”完成设置。OpenClash、Nikki 和多个手工 Mihomo Controller 可任意组合启用；每个目标独立连接和重连，但结果仍按全局 `domain_mode` 去重，写入单一输出，并共享单一可选 Rule-Bot 投递状态。Rule-Bot 使用完整 endpoint 与 Token 两个字段，`send_existing` 默认关闭。
+安装后从“服务 → Rule-Bot Client”完成设置。概览页和“收集与 Rule-Bot”页均提供服务总开关：关闭会持久化设置并立即停止服务，开启会校验配置后启动服务，路由器重启后仍保持该选择。OpenClash、Nikki 和多个手工 Mihomo Controller 可任意组合启用；每个目标独立连接和重连，但结果仍按全局 `domain_mode` 去重，写入单一输出，并共享单一可选 Rule-Bot 投递状态。Rule-Bot 使用完整 endpoint 与 Token 两个字段，`send_existing` 默认关闭。
 
 默认持久化目录为 `/etc/rule-bot-client/data/`。也可选择 `/tmp` 临时存储，或选择 `/mnt/...` 外部挂载；外部挂载缺失时服务会失败关闭，不会静默写回 Overlay。配置、凭据、证书、排除清单、输出和 Rule-Bot 状态均列入 sysupgrade keep 清单；“备份恢复”页面可导出或导入同一组数据，`/etc/rule-bot-client/recover.sh` 可在固件升级后按包 URL 和 SHA256 重装单包。自动发现的 Controller secret、生成配置和状态只写入 `/var/run/rule-bot-client/`，不会进入备份。
 
