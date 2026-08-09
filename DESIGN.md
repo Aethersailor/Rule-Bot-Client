@@ -110,8 +110,11 @@ acknowledgement/state-write crash safe.
 - Controller redirects are rejected so bearer credentials cannot cross hosts.
 - Environment proxy variables are ignored; controller and Rule-Bot connections
   are direct, and redirects are rejected for both.
-- Inline secrets are supported for compatibility but secret files or
-  environment variables are preferred.
+- Inline `secret` and `token` values are the default for ordinary deployments;
+  protecting the main configuration file is sufficient.
+- `secret_file`, `token_file`, `secret_env`, and `token_env` remain advanced
+  injection and rotation sources. Each credential accepts exactly one source;
+  conflicts are rejected instead of resolved by precedence.
 - TLS verification is enabled by default. Custom roots and server names are
   supported per instance.
 - Secrets are never included in logs or version output.

@@ -100,13 +100,17 @@ func discoverOpenClash(root string, source Source) (*client.InstanceConfig, Adap
 	status.HTTPPort = intOption(section, "http_port")
 	status.MixedPort = intOption(section, "mixed_port")
 	secret := strings.TrimSpace(section.Options["dashboard_password"])
-	status.SecretSet = secret != ""
-	secretFile := ""
-	if secret != "" {
+	secretFile := sourceSecretPath(source.ID)
+	if regularNonempty(rooted(root, secretFile)) {
+		status.SecretSet = true
+	} else if secret != "" {
+		status.SecretSet = true
 		secretFile = "/var/run/rule-bot-client/openclash.secret"
 		if err := writeRuntimeSecret(root, secretFile, secret); err != nil {
 			return nil, status, err
 		}
+	} else {
+		secretFile = ""
 	}
 	return &client.InstanceConfig{
 		Name: source.ID, URL: controllerURL, SecretFile: secretFile,
@@ -158,13 +162,17 @@ func discoverNikki(root string, source Source) (*client.InstanceConfig, AdapterS
 	status.MixedPort = scalarInt(values["mixed-port"])
 	status.HTTPPort = scalarInt(values["port"])
 	secret := strings.TrimSpace(scalarString(values["secret"]))
-	status.SecretSet = secret != ""
-	secretFile := ""
-	if secret != "" {
+	secretFile := sourceSecretPath(source.ID)
+	if regularNonempty(rooted(root, secretFile)) {
+		status.SecretSet = true
+	} else if secret != "" {
+		status.SecretSet = true
 		secretFile = "/var/run/rule-bot-client/nikki.secret"
 		if err := writeRuntimeSecret(root, secretFile, secret); err != nil {
 			return nil, status, err
 		}
+	} else {
+		secretFile = ""
 	}
 	instance := &client.InstanceConfig{
 		Name: source.ID, URL: controllerURL, SecretFile: secretFile,

@@ -33,7 +33,8 @@ return view.extend({
 		};
 		return E('div', {}, [
 			E('h2', {}, _('Rule-Bot Client') + ' - ' + _('Backup and restore')),
-			E('p', {}, _('Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded.')),
+			E('p', {}, _('Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, automatically discovered adapter secrets, and status are excluded.')),
+			E('p', {}, _('Backups contain credentials. Store downloaded archives securely.')),
 			E('p', {}, [ E('strong', {}, _('sysupgrade keep.d') + ': '), upgrade.complete ? _('complete') : _('incomplete') ]),
 			E('pre', {}, upgrade.keep_list || ''),
 			E('div', { class: 'cbi-page-actions' }, [

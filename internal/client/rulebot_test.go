@@ -230,6 +230,105 @@ func TestRuleBotTerminalStatusContract(t *testing.T) {
 	}
 }
 
+func TestResolveRuleBotTokenSupportsEveryCredentialSource(t *testing.T) {
+	directory := t.TempDir()
+	tokenPath := filepath.Join(directory, "rulebot.token")
+	if err := os.WriteFile(tokenPath, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const environmentVariable = "RULE_BOT_CLIENT_TEST_TOKEN_SOURCE"
+	t.Setenv(environmentVariable, "environment-token")
+
+	tests := []struct {
+		name string
+		cfg  RuleBotConfig
+		want string
+	}{
+		{name: "inline", cfg: RuleBotConfig{Token: "inline-token"}, want: "inline-token"},
+		{name: "file", cfg: RuleBotConfig{TokenFile: tokenPath}, want: "file-token"},
+		{name: "environment", cfg: RuleBotConfig{TokenEnv: environmentVariable}, want: "environment-token"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := resolveRuleBotToken(test.cfg)
+			if err != nil {
+				t.Fatalf("resolveRuleBotToken() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatal("resolveRuleBotToken() selected the wrong credential source")
+			}
+		})
+	}
+}
+
+func TestResolveRuleBotTokenRequiresCredentialSource(t *testing.T) {
+	_, err := resolveRuleBotToken(RuleBotConfig{})
+	if err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("resolveRuleBotToken() error = %v", err)
+	}
+}
+
+func TestResolveRuleBotTokenRejectsEveryCredentialSourceConflict(t *testing.T) {
+	directory := t.TempDir()
+	tokenPath := filepath.Join(directory, "rulebot.token")
+	const fileToken = "file-token-marker"
+	if err := os.WriteFile(tokenPath, []byte(fileToken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const environmentVariable = "RULE_BOT_CLIENT_TEST_TOKEN_CONFLICT"
+	const environmentToken = "environment-token-marker"
+	t.Setenv(environmentVariable, environmentToken)
+	const inlineToken = "inline-token-marker"
+
+	tests := map[string]RuleBotConfig{
+		"inline and file":        {Token: inlineToken, TokenFile: tokenPath},
+		"inline and environment": {Token: inlineToken, TokenEnv: environmentVariable},
+		"file and environment":   {TokenFile: tokenPath, TokenEnv: environmentVariable},
+		"all sources":            {Token: inlineToken, TokenFile: tokenPath, TokenEnv: environmentVariable},
+	}
+	for name, cfg := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := resolveRuleBotToken(cfg)
+			if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+				t.Fatalf("resolveRuleBotToken() error = %v", err)
+			}
+			for _, credential := range []string{inlineToken, fileToken, environmentToken} {
+				if strings.Contains(err.Error(), credential) {
+					t.Fatal("resolveRuleBotToken() error exposed a credential value")
+				}
+			}
+		})
+	}
+}
+
+func TestResolveRuleBotTokenErrorsDoNotExposeCredentialValues(t *testing.T) {
+	directory := t.TempDir()
+	tokenPath := filepath.Join(directory, "rulebot.token")
+	const credentialMarker = "rule-bot-token-marker"
+	if err := os.WriteFile(tokenPath, []byte(credentialMarker+"\ninvalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const environmentVariable = "RULE_BOT_CLIENT_TEST_UNSAFE_TOKEN"
+	t.Setenv(environmentVariable, credentialMarker+"\ninvalid")
+
+	tests := map[string]RuleBotConfig{
+		"inline":      {Token: credentialMarker + "\ninvalid"},
+		"file":        {TokenFile: tokenPath},
+		"environment": {TokenEnv: environmentVariable},
+	}
+	for name, cfg := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := resolveRuleBotToken(cfg)
+			if err == nil {
+				t.Fatal("resolveRuleBotToken() succeeded")
+			}
+			if strings.Contains(err.Error(), credentialMarker) {
+				t.Fatal("resolveRuleBotToken() error exposed a credential value")
+			}
+		})
+	}
+}
+
 func TestRuleBotSenderReadsRotatedTokenFile(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
@@ -302,12 +401,13 @@ func TestRuleBotSenderSkipsExistingOutputByDefault(t *testing.T) {
 	}
 }
 
-func TestRuleBotDeliveryLogDoesNotExposeEndpoint(t *testing.T) {
+func TestRuleBotDeliveryLogDoesNotExposeEndpointOrToken(t *testing.T) {
 	const endpoint = "https://private-rule-bot.example/api/private/hidden-path"
+	const token = "private-rule-bot-token-marker"
 	sender := &ruleBotSender{
 		config: RuleBotConfig{
 			Endpoint: endpoint,
-			Token:    "test-token",
+			Token:    token,
 			Retry: ReconnectConfig{
 				InitialDelay: Duration(10 * time.Millisecond),
 				MaxDelay:     Duration(20 * time.Millisecond),
@@ -332,8 +432,48 @@ func TestRuleBotDeliveryLogDoesNotExposeEndpoint(t *testing.T) {
 	if err := <-result; err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(logs.String(), "private-rule-bot.example") || strings.Contains(logs.String(), "/api/private/hidden-path") || !strings.Contains(logs.String(), "delivery_failed=network_error") {
+	if strings.Contains(logs.String(), "private-rule-bot.example") || strings.Contains(logs.String(), "/api/private/hidden-path") || strings.Contains(logs.String(), token) || !strings.Contains(logs.String(), "delivery_failed=network_error") {
 		t.Fatalf("delivery log exposed endpoint: %q", logs.String())
+	}
+}
+
+func TestRuleBotCredentialErrorLogDoesNotExposeToken(t *testing.T) {
+	const credentialMarker = "private-rule-bot-token-marker"
+	var requests atomic.Int64
+	sender := &ruleBotSender{
+		config: RuleBotConfig{
+			Endpoint: "https://private-rule-bot.example/api/private/hidden-path",
+			Token:    credentialMarker + "\ninvalid",
+			Retry: ReconnectConfig{
+				InitialDelay: Duration(10 * time.Millisecond),
+				MaxDelay:     Duration(20 * time.Millisecond),
+			},
+		},
+		client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			requests.Add(1)
+			return nil, errors.New("unexpected request")
+		})},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var logs lockedBuffer
+	result := make(chan error, 1)
+	go func() {
+		result <- sender.deliverUntilTerminal(ctx, log.New(&logs, "", 0), "example.com")
+	}()
+	deadline := time.Now().Add(time.Second)
+	for !strings.Contains(logs.String(), "delivery_failed=") && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if requests.Load() != 0 {
+		t.Fatal("invalid token reached the HTTP transport")
+	}
+	if strings.Contains(logs.String(), credentialMarker) || strings.Contains(logs.String(), "private-rule-bot.example") || !strings.Contains(logs.String(), "delivery_failed=credential_error") {
+		t.Fatalf("credential error log exposed sensitive configuration: %q", logs.String())
 	}
 }
 

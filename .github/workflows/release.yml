@@ -84,6 +84,11 @@ jobs:
           test "$(find dist -maxdepth 1 -type f -name 'rule-bot-client_*.deb' | wc -l)" -eq 3
           test "$(find dist -maxdepth 1 -type f -name '*openwrt*' | wc -l)" -eq 0
           test -f dist/checksums.txt
+          for archive in dist/rule-bot-client_*_linux_*.tar.gz; do
+            package=$(basename "$archive" .tar.gz)
+            tar -tzf "$archive" "$package/config.example.json" >/dev/null
+            test "$(tar -tvzf "$archive" "$package/config.example.json" | awk '{print $1}')" = "-rw-------"
+          done
           cd dist
           sha256sum -c checksums.txt
 

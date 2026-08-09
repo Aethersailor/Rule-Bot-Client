@@ -157,6 +157,9 @@ func settingsUCI(settings Settings) UCIConfig {
 }
 
 func ValidateSettings(settings *Settings) error {
+	if err := validateCredentialEdits(*settings); err != nil {
+		return err
+	}
 	settings.SchemaVersion = SchemaVersion
 	switch settings.WorkMode {
 	case WorkModeLocal:
@@ -264,6 +267,21 @@ func ValidateSettings(settings *Settings) error {
 		return errors.New("an enabled service requires at least one enabled source")
 	}
 	return validateRuleBot(&settings.RuleBot)
+}
+
+func validateCredentialEdits(settings Settings) error {
+	for _, source := range settings.Sources {
+		if source.ClearSecret && source.Secret != "" {
+			return fmt.Errorf("source %q cannot set and clear its secret in the same request", source.ID)
+		}
+		if source.ClearCA && source.CAPEM != "" {
+			return fmt.Errorf("source %q cannot set and clear its custom CA in the same request", source.ID)
+		}
+	}
+	if settings.RuleBot.ClearToken && settings.RuleBot.Token != "" {
+		return errors.New("Rule-Bot token cannot be set and cleared in the same request")
+	}
+	return nil
 }
 
 func validateRuleBot(ruleBot *RuleBot) error {

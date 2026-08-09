@@ -18,7 +18,7 @@ func main() {
 
 func run() int {
 	configPath := flag.String("config", "/etc/rule-bot-client/config.json", "path to the JSON configuration file")
-	check := flag.Bool("check", false, "validate configuration and referenced secret/TLS files, then exit")
+	check := flag.Bool("check", false, "validate configuration and referenced credential/TLS files, then exit")
 	version := flag.Bool("version", false, "print version information and exit")
 	flag.Parse()
 	if flag.NArg() != 0 {

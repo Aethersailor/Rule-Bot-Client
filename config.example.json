@@ -7,6 +7,10 @@
   "include_single_label_hosts": false,
   "rule_bot": {
     "enabled": false,
+    "endpoint": "https://rule-bot.example.com/api/v1/rule-bot-client/replace-with-your-private-path",
+    "token": "replace-with-your-rule-bot-token",
+    "state_file": "/var/lib/rule-bot-client/rulebot-state.json",
+    "send_existing": false,
     "privacy": {
       "reduce_to_registrable_domain": true,
       "exclude_suffixes": []
@@ -16,7 +20,7 @@
     {
       "name": "home",
       "url": "http://127.0.0.1:9090",
-      "secret_file": "/etc/rule-bot-client/home.secret"
+      "secret": "replace-with-your-mihomo-secret"
     }
   ]
 }

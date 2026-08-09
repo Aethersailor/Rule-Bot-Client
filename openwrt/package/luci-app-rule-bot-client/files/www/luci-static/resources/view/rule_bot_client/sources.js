@@ -11,6 +11,17 @@ function clone(value) {
 	return JSON.parse(JSON.stringify(value));
 }
 
+function bindClearConflict(valueInput, clearInput) {
+	valueInput.addEventListener('input', function() {
+		if (valueInput.value !== '')
+			clearInput.checked = false;
+	});
+	clearInput.addEventListener('change', function() {
+		if (clearInput.checked)
+			valueInput.value = '';
+	});
+}
+
 return view.extend({
 	load: function() { return Promise.all([ api.configEdit(), api.status() ]); },
 
@@ -43,10 +54,12 @@ return view.extend({
 		});
 		const name = E('input', { class: 'cbi-input-text', value: current.name || '' });
 		const url = E('input', { class: 'cbi-input-text', value: current.url || '' });
-		const secret = E('input', { class: 'cbi-input-password', type: 'password', value: '', placeholder: current.secret_set ? _('Secret configured') : _('No secret configured') });
+		const secret = E('input', { class: 'cbi-input-password', type: 'password', value: '', placeholder: current.secret_set ? _('Secret configured; leave empty to preserve') : _('Paste Controller secret') });
 		const clearSecret = E('input', { type: 'checkbox' });
 		const ca = E('textarea', { class: 'cbi-input-textarea', rows: 6, placeholder: current.ca_set ? _('CA already configured; leave empty to preserve') : '-----BEGIN CERTIFICATE-----' });
 		const clearCA = E('input', { type: 'checkbox' });
+		bindClearConflict(secret, clearSecret);
+		bindClearConflict(ca, clearCA);
 		const serverName = E('input', { class: 'cbi-input-text', value: current.tls_server_name || '' });
 		const skip = E('input', { type: 'checkbox' });
 		skip.checked = !!current.insecure_skip_verify;
@@ -58,6 +71,7 @@ return view.extend({
 			inputRow(_('Controller URL'), url),
 			inputRow(_('Controller secret'), secret),
 			inputRow(_('Clear existing secret'), clearSecret),
+			E('p', {}, _('Paste the Controller secret directly. No separate secret file is required.')),
 			inputRow(_('Custom CA PEM'), ca),
 			inputRow(_('Clear existing CA'), clearCA),
 			inputRow(_('TLS server name'), serverName),
@@ -85,10 +99,36 @@ return view.extend({
 		]);
 	},
 
+	showAdapterSecret: function(source, index) {
+		const current = clone(source);
+		const secret = E('input', {
+			class: 'cbi-input-password', type: 'password', value: '',
+			placeholder: current.secret_set ? _('Override configured; leave empty to preserve') : _('Use automatically discovered secret')
+		});
+		const clearSecret = E('input', { type: 'checkbox' });
+		bindClearConflict(secret, clearSecret);
+		ui.showModal(_('Controller secret override'), [
+			inputRow(_('Controller secret override'), secret),
+			inputRow(_('Clear secret override'), clearSecret),
+			E('p', {}, _('An explicit secret overrides automatic discovery. Clear it to use automatic discovery again.')),
+			E('p', {}, _('Credentials are stored with restricted permissions and are not returned by status or read-only RPC calls.')),
+			E('div', { class: 'right' }, [
+				E('button', { class: 'btn', click: ui.hideModal }, _('Cancel')), ' ',
+				E('button', { class: 'btn cbi-button-positive important', click: ui.createHandlerFn(this, function() {
+					current.secret = secret.value;
+					current.clear_secret = clearSecret.checked;
+					this.settings.sources[index] = current;
+					return api.save(this.settings).then(function() { ui.hideModal(); location.reload(); }).catch(api.notifyError);
+				}) }, _('Save'))
+			])
+		]);
+	},
+
 	showNikkiTLS: function(source, index) {
 		const current = clone(source);
 		const ca = E('textarea', { class: 'cbi-input-textarea', rows: 6, placeholder: current.ca_set ? _('CA already configured; leave empty to preserve') : '-----BEGIN CERTIFICATE-----' });
 		const clearCA = E('input', { type: 'checkbox' });
+		bindClearConflict(ca, clearCA);
 		const serverName = E('input', { class: 'cbi-input-text', value: current.tls_server_name || '' });
 		const skip = E('input', { type: 'checkbox' });
 		skip.checked = !!current.insecure_skip_verify;
@@ -142,6 +182,8 @@ return view.extend({
 				preferTLS.checked = !!source.prefer_tls;
 				preferTLS.addEventListener('change', function() { source.prefer_tls = preferTLS.checked; });
 				const actions = [ E('button', { class: 'btn cbi-button-action', disabled: !source.enabled, click: ui.createHandlerFn(this, this.probe, source.id) }, _('Test connection')) ];
+				actions.push(' ');
+				actions.push(E('button', { class: 'btn', click: ui.createHandlerFn(this, this.showAdapterSecret, source, index) }, _('Controller secret')));
 				if (source.type === 'nikki') {
 					actions.push(' ');
 					actions.push(E('button', { class: 'btn', click: ui.createHandlerFn(this, this.showNikkiTLS, source, index) }, _('Nikki TLS settings')));

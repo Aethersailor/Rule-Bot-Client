@@ -3,6 +3,7 @@ package openwrt
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -94,6 +95,152 @@ port: 7895
 		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
 			t.Fatalf("credential %s mode = %v", path, info.Mode().Perm())
 		}
+	}
+}
+
+func TestAutomaticControllerSecretOverrideAndFallback(t *testing.T) {
+	root := t.TempDir()
+	writeRootFile(t, root, "/etc/config/openclash", `config openclash 'config'
+	option cn_port '9090'
+	option dashboard_password 'discovered-openclash-secret'
+`)
+	writeRootFile(t, root, "/etc/nikki/run/config.yaml", `external-controller: "127.0.0.1:9091"
+secret: discovered-nikki-secret
+`)
+	settings := DefaultSettings()
+	settings.Sources[0].Secret = "override-openclash-secret"
+	settings.Sources[1].Enabled = true
+	settings.Sources[1].Secret = "override-nikki-secret"
+	backend := Backend{Root: root, Testing: true}
+	if _, err := backend.save(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := buildRuntimeConfig(root, loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantOverridePaths := map[string]string{
+		SourceOpenClash: sourceSecretPath(SourceOpenClash),
+		SourceNikki:     sourceSecretPath(SourceNikki),
+	}
+	gotOverridePaths := map[string]string{}
+	for _, instance := range generated.Config.Instances {
+		gotOverridePaths[instance.Name] = instance.SecretFile
+	}
+	for id, want := range wantOverridePaths {
+		if gotOverridePaths[id] != want {
+			t.Fatalf("%s secret_file = %q, want override %q", id, gotOverridePaths[id], want)
+		}
+	}
+	uci, err := os.ReadFile(rooted(root, "/etc/config/rule_bot_client"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sensitive := range []string{"override-openclash-secret", "override-nikki-secret"} {
+		if bytesContains(uci, sensitive) {
+			t.Fatalf("UCI exposed automatic adapter override %q", sensitive)
+		}
+	}
+	editableResult, err := backend.Dispatch(context.Background(), "config_edit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertJSONOmits(t, editableResult, "override-openclash-secret", "override-nikki-secret")
+	editable := editableResult.(Settings)
+	for index := range editable.Sources {
+		if editable.Sources[index].ID == SourceOpenClash || editable.Sources[index].ID == SourceNikki {
+			if !editable.Sources[index].SecretSet || editable.Sources[index].Secret != "" {
+				t.Fatalf("editable source was not redacted: %+v", editable.Sources[index])
+			}
+			editable.Sources[index].ClearSecret = true
+		}
+	}
+	if _, err := backend.save(context.Background(), editable); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = LoadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err = buildRuntimeConfig(root, loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDiscoveredPaths := map[string]string{
+		SourceOpenClash: "/var/run/rule-bot-client/openclash.secret",
+		SourceNikki:     "/var/run/rule-bot-client/nikki.secret",
+	}
+	gotDiscoveredPaths := map[string]string{}
+	for _, instance := range generated.Config.Instances {
+		gotDiscoveredPaths[instance.Name] = instance.SecretFile
+	}
+	for id, want := range wantDiscoveredPaths {
+		if gotDiscoveredPaths[id] != want {
+			t.Fatalf("%s secret_file = %q, want discovered %q", id, gotDiscoveredPaths[id], want)
+		}
+	}
+	for _, id := range []string{SourceOpenClash, SourceNikki} {
+		if _, err := os.Stat(rooted(root, sourceSecretPath(id))); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s override survived clear: %v", id, err)
+		}
+	}
+	for path, want := range map[string]string{
+		"/var/run/rule-bot-client/openclash.secret": "discovered-openclash-secret",
+		"/var/run/rule-bot-client/nikki.secret":     "discovered-nikki-secret",
+	} {
+		data, err := os.ReadFile(rooted(root, path))
+		if err != nil || strings.TrimSpace(string(data)) != want {
+			t.Fatalf("discovered credential %s = %q, %v", path, data, err)
+		}
+	}
+}
+
+func TestCredentialClearSetConflictsAreRejectedWithoutEchoingValues(t *testing.T) {
+	tests := []struct {
+		name      string
+		sensitive string
+		wantError string
+		configure func(*Settings)
+	}{
+		{
+			name: "source secret", sensitive: "do-not-echo-source-secret", wantError: "cannot set and clear its secret",
+			configure: func(settings *Settings) {
+				settings.Sources[0].Secret = "do-not-echo-source-secret"
+				settings.Sources[0].ClearSecret = true
+			},
+		},
+		{
+			name: "custom CA", sensitive: "do-not-echo-custom-ca", wantError: "cannot set and clear its custom CA",
+			configure: func(settings *Settings) {
+				settings.Sources[0].CAPEM = "do-not-echo-custom-ca"
+				settings.Sources[0].ClearCA = true
+			},
+		},
+		{
+			name: "Rule-Bot token", sensitive: "do-not-echo-rule-bot-token", wantError: "cannot be set and cleared",
+			configure: func(settings *Settings) {
+				settings.RuleBot.Token = "do-not-echo-rule-bot-token"
+				settings.RuleBot.ClearToken = true
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := DefaultSettings()
+			test.configure(&settings)
+			_, err := (Backend{Root: t.TempDir(), Testing: true}).save(context.Background(), settings)
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("save() error = %v", err)
+			}
+			if strings.Contains(err.Error(), test.sensitive) {
+				t.Fatalf("save() error exposed submitted credential: %v", err)
+			}
+		})
 	}
 }
 
@@ -244,7 +391,11 @@ func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 	sourceRoot := t.TempDir()
 	writeRootFile(t, sourceRoot, "/bin/opkg", "")
 	settings := DefaultSettings()
-	settings.Sources = []Source{{ID: "src_0123abcd", Type: SourceManual, Enabled: true, Name: "Manual", URL: "http://127.0.0.1:9"}}
+	settings.Sources = []Source{{
+		ID: "src_0123abcd", Type: SourceManual, Enabled: true, Name: "Manual", URL: "http://127.0.0.1:9",
+		Secret: "backup-controller-secret",
+	}}
+	settings.RuleBot.Token = "backup-rule-bot-token"
 	sourceBackend := Backend{Root: sourceRoot, Testing: true}
 	if _, err := sourceBackend.save(context.Background(), settings); err != nil {
 		t.Fatal(err)
@@ -280,12 +431,219 @@ func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 	if mode := fileMode(t, targetRoot, "/etc/rule-bot-client/data/domains.txt"); runtime.GOOS != "windows" && mode != 0o600 {
 		t.Fatalf("restored data mode = %04o", mode)
 	}
+	for path, want := range map[string]string{
+		sourceSecretPath("src_0123abcd"): "backup-controller-secret",
+		ruleBotTokenPath():               "backup-rule-bot-token",
+	} {
+		credential, err := os.ReadFile(rooted(targetRoot, path))
+		if err != nil || strings.TrimSpace(string(credential)) != want {
+			t.Fatalf("restored credential %s = %q, %v", path, credential, err)
+		}
+		if mode := fileMode(t, targetRoot, path); runtime.GOOS != "windows" && mode != 0o640 {
+			t.Fatalf("restored credential %s mode = %04o", path, mode)
+		}
+	}
+	restoredUCI, err := os.ReadFile(rooted(targetRoot, "/etc/config/rule_bot_client"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sensitive := range []string{"backup-controller-secret", "backup-rule-bot-token"} {
+		if bytesContains(restoredUCI, sensitive) {
+			t.Fatalf("restored UCI exposed credential %q", sensitive)
+		}
+	}
 	info, err := targetBackend.upgradeInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info["package_manager"] != "apk" || info["complete"] != true {
 		t.Fatalf("upgradeInfo = %#v", info)
+	}
+}
+
+func TestRestoreRemovesManagedFilesMissingFromBackup(t *testing.T) {
+	sourceRoot := t.TempDir()
+	sourceSettings := DefaultSettings()
+	sourceSettings.Enabled = false
+	sourceBackend := Backend{Root: sourceRoot, Testing: true}
+	if _, err := sourceBackend.save(context.Background(), sourceSettings); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := sourceBackend.createBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	targetRoot := t.TempDir()
+	targetSettings := DefaultSettings()
+	targetSettings.Enabled = false
+	targetBackend := Backend{Root: targetRoot, Testing: true}
+	if _, err := targetBackend.save(context.Background(), targetSettings); err != nil {
+		t.Fatal(err)
+	}
+	stale := []string{
+		sourceSecretPath(SourceOpenClash),
+		ruleBotTokenPath(),
+		sourceCAPath(SourceOpenClash),
+		"/etc/rule-bot-client/data/rulebot-state.json",
+	}
+	for _, path := range stale {
+		writeRootFile(t, targetRoot, path, "stale-restored-value\n")
+	}
+
+	if _, err := targetBackend.restore(context.Background(), base64.StdEncoding.EncodeToString(archive)); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range stale {
+		if _, err := os.Lstat(rooted(targetRoot, path)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("managed path absent from backup survived restore: %s: %v", path, err)
+		}
+	}
+}
+
+func TestRestoreRejectsArchiveWithoutUCIConfig(t *testing.T) {
+	partialRoot := t.TempDir()
+	writeRootFile(t, partialRoot, ruleBotTokenPath(), "partial-token\n")
+	partialArchive, err := (Backend{Root: partialRoot, Testing: true}).createBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	targetRoot := t.TempDir()
+	targetSettings := DefaultSettings()
+	targetSettings.Enabled = false
+	targetBackend := Backend{Root: targetRoot, Testing: true}
+	if _, err := targetBackend.save(context.Background(), targetSettings); err != nil {
+		t.Fatal(err)
+	}
+	configPath := rooted(targetRoot, "/etc/config/rule_bot_client")
+	originalConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = targetBackend.restore(context.Background(), base64.StdEncoding.EncodeToString(partialArchive))
+	if err == nil || !strings.Contains(err.Error(), "missing etc/config/rule_bot_client") {
+		t.Fatalf("restore() error = %v", err)
+	}
+	currentConfig, err := os.ReadFile(configPath)
+	if err != nil || string(currentConfig) != string(originalConfig) {
+		t.Fatalf("partial restore changed the existing UCI config: %q, %v", currentConfig, err)
+	}
+	if _, err := os.Lstat(rooted(targetRoot, ruleBotTokenPath())); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("partial restore wrote a token before rejecting the archive: %v", err)
+	}
+}
+
+func TestReconcileBackupDirectoryRejectsNonDirectoryTargets(t *testing.T) {
+	const logical = "/etc/rule-bot-client/credentials"
+	t.Run("regular file", func(t *testing.T) {
+		root := t.TempDir()
+		writeRootFile(t, root, logical, "do-not-replace\n")
+		err := reconcileBackupDirectory(root, logical, map[string]backupEntry{})
+		if err == nil || !strings.Contains(err.Error(), "not a real directory") {
+			t.Fatalf("reconcileBackupDirectory() error = %v", err)
+		}
+		data, readErr := os.ReadFile(rooted(root, logical))
+		if readErr != nil || string(data) != "do-not-replace\n" {
+			t.Fatalf("non-directory target changed: %q, %v", data, readErr)
+		}
+	})
+
+	t.Run("symlink", func(t *testing.T) {
+		root := t.TempDir()
+		outside := t.TempDir()
+		victim := filepath.Join(outside, "outside-secret")
+		if err := os.WriteFile(victim, []byte("must-survive\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		link := rooted(root, logical)
+		if err := os.MkdirAll(filepath.Dir(link), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, link); err != nil {
+			t.Skipf("directory symlinks unavailable: %v", err)
+		}
+		err := reconcileBackupDirectory(root, logical, map[string]backupEntry{})
+		if err == nil || !strings.Contains(err.Error(), "not a real directory") {
+			t.Fatalf("reconcileBackupDirectory() error = %v", err)
+		}
+		data, readErr := os.ReadFile(victim)
+		if readErr != nil || string(data) != "must-survive\n" {
+			t.Fatalf("symlink target was modified: %q, %v", data, readErr)
+		}
+	})
+}
+
+func TestApplyBackupValidatesCompleteArchiveBeforeMutation(t *testing.T) {
+	sourceRoot := t.TempDir()
+	sourceSettings := DefaultSettings()
+	sourceSettings.Enabled = false
+	sourceSettings.Sources[0].Secret = "replacement-secret"
+	sourceBackend := Backend{Root: sourceRoot, Testing: true}
+	if _, err := sourceBackend.save(context.Background(), sourceSettings); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := sourceBackend.createBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive[len(archive)-1] ^= 0xff
+
+	targetRoot := t.TempDir()
+	targetSettings := DefaultSettings()
+	targetSettings.Enabled = false
+	targetBackend := Backend{Root: targetRoot, Testing: true}
+	if _, err := targetBackend.save(context.Background(), targetSettings); err != nil {
+		t.Fatal(err)
+	}
+	writeRootFile(t, targetRoot, sourceSecretPath(SourceOpenClash), "original-secret\n")
+	if err := targetBackend.applyBackup(archive); err == nil {
+		t.Fatal("applyBackup() accepted an archive with a corrupt trailer")
+	}
+	secret, err := os.ReadFile(rooted(targetRoot, sourceSecretPath(SourceOpenClash)))
+	if err != nil || string(secret) != "original-secret\n" {
+		t.Fatalf("target changed before complete archive validation: %q, %v", secret, err)
+	}
+}
+
+func TestRestoreFailureRollsBackExactManagedFiles(t *testing.T) {
+	targetRoot := t.TempDir()
+	targetSettings := DefaultSettings()
+	targetSettings.Enabled = false
+	targetBackend := Backend{Root: targetRoot, Testing: true}
+	if _, err := targetBackend.save(context.Background(), targetSettings); err != nil {
+		t.Fatal(err)
+	}
+	original := map[string]string{
+		sourceSecretPath(SourceOpenClash):              "original-secret\n",
+		ruleBotTokenPath():                             "original-token\n",
+		"/etc/rule-bot-client/data/rulebot-state.json": "{\"version\":1,\"offset\":0}\n",
+		"/etc/rule-bot-client/data/domains.txt":        "original.example\n",
+	}
+	for path, data := range original {
+		writeRootFile(t, targetRoot, path, data)
+	}
+
+	invalidRoot := t.TempDir()
+	writeRootFile(t, invalidRoot, "/etc/config/rule_bot_client", "unsupported invalid-backup\n")
+	writeRootFile(t, invalidRoot, sourceSecretPath(SourceOpenClash), "replacement-secret\n")
+	newOnlyPath := sourceCAPath(SourceNikki)
+	writeRootFile(t, invalidRoot, newOnlyPath, "replacement-certificate\n")
+	invalidArchive, err := (Backend{Root: invalidRoot, Testing: true}).createBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := targetBackend.restore(context.Background(), base64.StdEncoding.EncodeToString(invalidArchive)); err == nil {
+		t.Fatal("restore() succeeded with an invalid restored UCI configuration")
+	}
+	for path, want := range original {
+		data, err := os.ReadFile(rooted(targetRoot, path))
+		if err != nil || string(data) != want {
+			t.Fatalf("rollback did not restore %s: %q, %v", path, data, err)
+		}
+	}
+	if _, err := os.Lstat(rooted(targetRoot, newOnlyPath)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("rollback retained a file introduced by the failed restore: %v", err)
 	}
 }
 
@@ -352,12 +710,19 @@ config source 'openclash'
 	option enabled '1'
 	option name 'OpenClash'
 
+config source 'src_0123abcd'
+	option type 'manual'
+	option enabled '0'
+	option name 'Private Controller'
+	option url 'http://192.0.2.10:9090'
+
 config rule_bot 'rule_bot'
 	option enabled '1'
 	option endpoint 'https://private-rule-bot.example/api/private/hidden-path'
 	option proxy_url 'http://proxy-user:proxy-password@127.0.0.1:7890'
 `)
 	writeRootFile(t, root, ruleBotTokenPath(), "existing-token\n")
+	writeRootFile(t, root, sourceSecretPath("src_0123abcd"), "existing-controller-secret\n")
 
 	backend := Backend{Root: root, Testing: true}
 	result, err := backend.Dispatch(context.Background(), "config", nil)
@@ -365,6 +730,7 @@ config rule_bot 'rule_bot'
 		t.Fatal(err)
 	}
 	settings := result.(Settings)
+	assertJSONOmits(t, result, "existing-token", "existing-controller-secret", "proxy-user", "proxy-password")
 	if settings.RuleBot.Endpoint != "" || settings.RuleBot.ProxyURL != "" {
 		t.Fatalf("read config exposed Rule-Bot settings: endpoint=%q proxy=%q", settings.RuleBot.Endpoint, settings.RuleBot.ProxyURL)
 	}
@@ -374,6 +740,7 @@ config rule_bot 'rule_bot'
 		t.Fatal(err)
 	}
 	status := result.(ServiceStatus)
+	assertJSONOmits(t, result, "existing-token", "existing-controller-secret", "private-rule-bot.example", "proxy-user", "proxy-password")
 	if status.Config.RuleBot.Endpoint != "" || status.Config.RuleBot.ProxyURL != "" {
 		t.Fatalf("read status exposed Rule-Bot settings: endpoint=%q proxy=%q", status.Config.RuleBot.Endpoint, status.Config.RuleBot.ProxyURL)
 	}
@@ -394,6 +761,7 @@ config rule_bot 'rule_bot'
 		t.Fatal(err)
 	}
 	editable := result.(Settings)
+	assertJSONOmits(t, result, "existing-token", "existing-controller-secret", "proxy-user", "proxy-password")
 	if editable.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" {
 		t.Fatalf("write-authorized editor endpoint = %q", editable.RuleBot.Endpoint)
 	}
@@ -411,6 +779,23 @@ config rule_bot 'rule_bot'
 	if stored.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" || stored.RuleBot.ProxyURL != "http://proxy-user:proxy-password@127.0.0.1:7890" {
 		t.Fatalf("editor round trip changed sensitive settings: endpoint=%q proxy=%q", stored.RuleBot.Endpoint, stored.RuleBot.ProxyURL)
 	}
+}
+
+func assertJSONOmits(t *testing.T, value any, sensitive ...string) {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range sensitive {
+		if bytesContains(data, item) {
+			t.Fatalf("serialized response exposed %q: %s", item, data)
+		}
+	}
+}
+
+func bytesContains(data []byte, value string) bool {
+	return strings.Contains(string(data), value)
 }
 
 func fileMode(t *testing.T, root, logical string) os.FileMode {

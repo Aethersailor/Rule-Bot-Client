@@ -86,6 +86,9 @@ func buildInstance(cfg InstanceConfig) (*controllerInstance, error) {
 }
 
 func resolveSecret(cfg InstanceConfig) (string, error) {
+	if credentialSourceCount(cfg.Secret, cfg.SecretFile, cfg.SecretEnv) > 1 {
+		return "", errors.New("secret, secret_file, and secret_env are mutually exclusive")
+	}
 	var secret string
 	configured := true
 	switch {

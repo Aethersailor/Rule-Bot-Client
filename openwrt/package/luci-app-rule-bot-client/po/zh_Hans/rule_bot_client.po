@@ -25,14 +25,20 @@ msgstr "sysupgrade 后请重装匹配的单包，或运行 /etc/rule-bot-client/
 msgid "An offline controller may be saved; Rule-Bot Client will reconnect independently."
 msgstr "离线控制器也可保存；Rule-Bot 客户端会独立重连。"
 
+msgid "An explicit secret overrides automatic discovery. Clear it to use automatic discovery again."
+msgstr "显式密钥优先于自动发现的密钥。清除覆盖后，系统恢复自动发现。"
+
 msgid "Automatic adapters"
 msgstr "自动适配器"
 
 msgid "Backup and restore"
 msgstr "备份与恢复"
 
-msgid "Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, adapter secrets, and status are excluded."
+msgid "Backups include UCI, credentials, certificates, exclusion list, persistent data, Rule-Bot state, and recovery script. Runtime-generated config, automatically discovered adapter secrets, and status are excluded."
 msgstr "备份包含 UCI、凭据、证书、排除清单、持久数据、Rule-Bot 状态和恢复脚本；不包含运行时配置、自动发现密钥与状态。"
+
+msgid "Backups contain credentials. Store downloaded archives securely."
+msgstr "备份包含凭据。请安全保管下载的归档文件。"
 
 msgid "bytes"
 msgstr "字节"
@@ -58,6 +64,9 @@ msgstr "清除现有密钥"
 msgid "Clear existing token"
 msgstr "清除现有令牌"
 
+msgid "Clear secret override"
+msgstr "清除密钥覆盖"
+
 msgid "Clear safely"
 msgstr "安全清空"
 
@@ -79,11 +88,17 @@ msgstr "已连接"
 msgid "Controller secret"
 msgstr "控制器密钥"
 
+msgid "Controller secret override"
+msgstr "控制器密钥覆盖"
+
 msgid "Controller URL"
 msgstr "控制器地址"
 
 msgid "Create backup"
 msgstr "创建备份"
+
+msgid "Credentials are stored with restricted permissions and are not returned by status or read-only RPC calls."
+msgstr "凭据使用受限权限保存，状态和只读 RPC 不会返回凭据。"
 
 msgid "Custom CA PEM"
 msgstr "自定义 CA PEM"
@@ -205,6 +220,9 @@ msgstr "可选"
 msgid "Outbound proxy URL"
 msgstr "出站代理地址"
 
+msgid "Override configured; leave empty to preserve"
+msgstr "已配置覆盖密钥；留空则保留"
+
 msgid "Output"
 msgstr "输出"
 
@@ -213,6 +231,15 @@ msgstr "概览"
 
 msgid "Paste the complete endpoint including its non-root path."
 msgstr "粘贴包含非根路径的完整接口地址。"
+
+msgid "Paste Controller secret"
+msgstr "粘贴控制器密钥"
+
+msgid "Paste the Controller secret directly. No separate secret file is required."
+msgstr "直接粘贴控制器密钥，无需另建密钥文件。"
+
+msgid "Paste the Rule-Bot token directly. No separate token file is required."
+msgstr "直接粘贴 Rule-Bot 令牌（Token），无需另建令牌文件。"
 
 msgid "Paste token"
 msgstr "粘贴令牌（Token）"
@@ -276,6 +303,9 @@ msgstr "搜索有数量边界，且只读取固定的当前输出路径。"
 
 msgid "Secret configured"
 msgstr "已配置密钥"
+
+msgid "Secret configured; leave empty to preserve"
+msgstr "已配置密钥；留空则保留"
 
 msgid "Secret"
 msgstr "密钥"
@@ -345,6 +375,9 @@ msgstr "不可用"
 
 msgid "Use Nikki TLS controller"
 msgstr "使用 Nikki TLS 控制器"
+
+msgid "Use automatically discovered secret"
+msgstr "使用自动发现的密钥"
 
 msgid "Waiting"
 msgstr "等待中"

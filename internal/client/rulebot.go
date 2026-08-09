@@ -68,6 +68,9 @@ type ruleBotSender struct {
 }
 
 func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
+	if credentialSourceCount(cfg.Token, cfg.TokenFile, cfg.TokenEnv) > 1 {
+		return "", errors.New("token, token_file, and token_env are mutually exclusive")
+	}
 	var token string
 	switch {
 	case cfg.TokenFile != "":

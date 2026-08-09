@@ -100,6 +100,16 @@ type ReconnectConfig struct {
 	MaxDelay     Duration `json:"max_delay,omitempty"`
 }
 
+func credentialSourceCount(sources ...string) int {
+	count := 0
+	for _, source := range sources {
+		if source != "" {
+			count++
+		}
+	}
+	return count
+}
+
 func LoadConfig(path string) (Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -232,14 +242,12 @@ func (c *RuleBotConfig) validate(configDir, output string) error {
 		c.ProxyURL = proxyURL.String()
 	}
 
-	tokenSources := 0
-	for _, source := range []string{c.Token, c.TokenFile, c.TokenEnv} {
-		if source != "" {
-			tokenSources++
-		}
-	}
-	if tokenSources != 1 {
-		return errors.New("exactly one of token, token_file, or token_env is required")
+	switch credentialSourceCount(c.Token, c.TokenFile, c.TokenEnv) {
+	case 0:
+		return errors.New("one of token, token_file, or token_env is required")
+	case 1:
+	default:
+		return errors.New("token, token_file, and token_env are mutually exclusive")
 	}
 	if c.TokenFile != "" && !filepath.IsAbs(c.TokenFile) {
 		c.TokenFile = filepath.Join(configDir, c.TokenFile)
@@ -302,13 +310,7 @@ func (c *InstanceConfig) validate(configDir string) error {
 	parsed.RawPath = ""
 	c.URL = strings.TrimSuffix(parsed.String(), "/")
 
-	secretSources := 0
-	for _, source := range []string{c.Secret, c.SecretFile, c.SecretEnv} {
-		if source != "" {
-			secretSources++
-		}
-	}
-	if secretSources > 1 {
+	if credentialSourceCount(c.Secret, c.SecretFile, c.SecretEnv) > 1 {
 		return errors.New("secret, secret_file, and secret_env are mutually exclusive")
 	}
 	if c.SecretFile != "" && !filepath.IsAbs(c.SecretFile) {

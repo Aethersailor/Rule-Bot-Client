@@ -27,6 +27,14 @@ return view.extend({
 		const endpoint = E('input', { class: 'cbi-input-text', value: settings.rule_bot.endpoint || '', placeholder: 'https://rule-bot.example/api/hidden/path' });
 		const token = E('input', { class: 'cbi-input-password', type: 'password', value: '', placeholder: settings.rule_bot.token_set ? _('Token configured; leave empty to preserve') : _('Paste token') });
 		const clearToken = E('input', { type: 'checkbox' });
+		token.addEventListener('input', function() {
+			if (token.value !== '')
+				clearToken.checked = false;
+		});
+		clearToken.addEventListener('change', function() {
+			if (clearToken.checked)
+				token.value = '';
+		});
 		const sendExisting = E('input', { type: 'checkbox' });
 		sendExisting.checked = !!settings.rule_bot.send_existing;
 		const proxy = E('input', { class: 'cbi-input-text', value: settings.rule_bot.proxy_url || '', placeholder: _('Optional') + ': http://127.0.0.1:7890', input: function() { settings.rule_bot.proxy_credentials_set = false; } });
@@ -59,7 +67,7 @@ return view.extend({
 			row(_('External data directory'), external),
 			E('h3', {}, 'Rule-Bot'),
 			row(_('Complete endpoint'), endpoint, _('Paste the complete endpoint including its non-root path.')),
-			row(_('Token'), token),
+			row(_('Token'), token, _('Paste the Rule-Bot token directly. No separate token file is required.')),
 			row(_('Clear existing token'), clearToken),
 			row(_('Send existing domains'), sendExisting, _('Default is off to prevent historical bulk delivery.')),
 			row(_('Outbound proxy URL'), proxy),

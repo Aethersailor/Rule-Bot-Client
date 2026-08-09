@@ -47,9 +47,12 @@ done
 
 grep -F 'procd_add_reload_trigger rule_bot_client openclash nikki' "$root/etc/init.d/rule-bot-client"
 grep -F '/var/run/rule-bot-client/config.json' "$root/etc/init.d/rule-bot-client"
+grep -F 'procd_set_param user nobody' "$root/etc/init.d/rule-bot-client"
+grep -F 'procd_set_param group nogroup' "$root/etc/init.d/rule-bot-client"
 grep -F "return { 'luci.rule_bot_client': methods };" "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const allowed_actions = {' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const process = popen(' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
+grep -F 'chmod(request, 0o600)' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F "error_code: 'backend_start_failed'" "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F '"error_code": "backend_request_failed"' cmd/rule-bot-client-openwrt/main.go
 if grep -F "bus.call('file', 'exec'" "$root/usr/share/rpcd/ucode/luci.rule_bot_client"; then
@@ -68,6 +71,10 @@ done
 acl="$root/usr/share/rpcd/acl.d/luci-app-rule-bot-client.json"
 jq -e '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index("config_edit") | not' "$acl" >/dev/null
 jq -e '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index("config_edit") != null' "$acl" >/dev/null
+for method in config_edit save clear backup restore service; do
+  jq -e --arg method "$method" '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index($method) | not' "$acl" >/dev/null
+  jq -e --arg method "$method" '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index($method) != null' "$acl" >/dev/null
+done
 
 for file in "$root"/www/luci-static/resources/rule_bot_client/*.js "$root"/www/luci-static/resources/view/rule_bot_client/*.js; do
   node --check "$file" >/dev/null
@@ -124,7 +131,7 @@ const Module = factory(rpc, ui, baseclass, { env: { lang: 'en' } }, element);
 if (typeof Module !== 'function')
   throw new Error('rule_bot_client.api must yield a LuCI constructor');
 const api = new Module();
-for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'save', 'clear', 'restore', 'service' ]) {
+for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'logs', 'backup', 'upgrade', 'save', 'clear', 'restore', 'service' ]) {
   if (typeof api[method] !== 'function')
     throw new Error(`rule_bot_client.api is missing method ${method}`);
 }
@@ -140,6 +147,173 @@ for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'sa
       throw new Error('localized error summary and technical detail were not rendered separately');
   }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+NODE
+
+node - "$root/www/luci-static/resources/view/rule_bot_client/sources.js" <<'NODE'
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const view = { extend: (methods) => methods };
+let modal;
+let saved;
+let reloaded = false;
+const api = {
+  save: (settings) => { saved = JSON.parse(JSON.stringify(settings)); return Promise.resolve({ ok: true }); },
+  notifyError: (error) => { throw error; },
+  detailNode: () => ({}),
+  probe: () => Promise.resolve({ ok: true })
+};
+const ui = {
+  addNotification: () => {},
+  showModal: (title, nodes) => { modal = { title, nodes }; },
+  hideModal: () => {},
+  createHandlerFn: (scope, handler, ...args) => () => handler.apply(scope, args)
+};
+function element(tag, attributes, children) {
+  if (children === undefined && (Array.isArray(attributes) || typeof attributes === 'string')) {
+    children = attributes;
+    attributes = {};
+  }
+  const listeners = {};
+  const node = {
+    tag, attributes: attributes || {}, children, listeners,
+    value: attributes && attributes.value !== undefined ? attributes.value : '',
+    checked: attributes && attributes.checked === true,
+    addEventListener: (name, handler) => { listeners[name] = handler; }
+  };
+  return node;
+}
+function find(node, predicate) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = find(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  }
+  if (!node || typeof node !== 'object') return null;
+  if (predicate(node)) return node;
+  return find(node.children, predicate);
+}
+function rowControl(root, label) {
+  const row = find(root, (node) => node.attributes && node.attributes.class === 'cbi-value' &&
+    find(node.children, (child) => child.tag === 'label' && child.children === label));
+  return row && find(row.children, (node) => node.tag === 'input');
+}
+global.location = { reload: () => { reloaded = true; } };
+const factory = new Function('view', 'ui', 'api', 'E', '_', source);
+const module = factory(view, ui, api, element, (message) => message);
+const settings = {
+  sources: [
+    { id: 'openclash', type: 'openclash', enabled: true, name: 'OpenClash', secret_set: true },
+    { id: 'nikki', type: 'nikki', enabled: true, name: 'Nikki', secret_set: false }
+  ]
+};
+const rendered = module.render([ settings, { adapters: { openclash: { available: true }, nikki: { available: true } } } ]);
+if (!find(rendered, (node) => node.tag === 'button' && node.children === 'Controller secret'))
+  throw new Error('automatic adapters do not expose a Controller secret override action');
+module.showEditor({
+  id: 'src_0123abcd', type: 'manual', enabled: true, name: 'Manual',
+  url: 'http://127.0.0.1:9090', secret_set: true
+}, null);
+const manualPassword = find(modal.nodes, (node) => node.tag === 'input' && node.attributes.type === 'password');
+const manualClear = rowControl(modal.nodes, 'Clear existing secret');
+if (!manualPassword || manualPassword.value !== '' || manualPassword.attributes.placeholder !== 'Secret configured; leave empty to preserve')
+  throw new Error('manual Controller secret input must be direct and must never prefill the stored secret');
+manualPassword.value = 'replacement-manual-secret';
+manualPassword.listeners.input();
+manualClear.checked = true;
+manualClear.listeners.change();
+if (manualPassword.value !== '')
+  throw new Error('manual Controller secret clear did not remove the newly entered value');
+module.showAdapterSecret(settings.sources[0], 0);
+const password = find(modal.nodes, (node) => node.tag === 'input' && node.attributes.type === 'password');
+const clear = find(modal.nodes, (node) => node.tag === 'input' && node.attributes.type === 'checkbox');
+const save = find(modal.nodes, (node) => node.tag === 'button' && node.children === 'Save');
+if (!password || password.value !== '' || password.attributes.placeholder !== 'Override configured; leave empty to preserve')
+  throw new Error('adapter override must never prefill the stored secret');
+password.value = 'replacement-secret';
+password.listeners.input();
+clear.checked = true;
+clear.listeners.change();
+if (password.value !== '')
+  throw new Error('selecting clear did not remove the newly entered secret');
+password.value = 'replacement-secret';
+password.listeners.input();
+if (clear.checked)
+  throw new Error('entering a secret did not clear the conflicting removal request');
+Promise.resolve(save.attributes.click()).then(() => {
+  if (!saved || saved.sources[0].secret !== 'replacement-secret' || saved.sources[0].clear_secret !== false)
+    throw new Error('adapter override was not submitted through the write-authorized save RPC');
+  if (!reloaded)
+    throw new Error('adapter override save did not refresh the page');
+}).catch((error) => { console.error(error); process.exitCode = 1; });
+NODE
+
+node - "$root/www/luci-static/resources/view/rule_bot_client/collection.js" <<'NODE'
+const fs = require('fs');
+const source = fs.readFileSync(process.argv[2], 'utf8');
+const view = { extend: (methods) => methods };
+let saved;
+const api = {
+  save: (settings) => { saved = JSON.parse(JSON.stringify(settings)); return Promise.resolve({ ok: true }); },
+  notifyError: (error) => { throw error; }
+};
+const ui = { addNotification: () => {} };
+function element(tag, attributes, children) {
+  if (children === undefined && (Array.isArray(attributes) || typeof attributes === 'string')) {
+    children = attributes;
+    attributes = {};
+  }
+  const listeners = {};
+  return {
+    tag, attributes: attributes || {}, children, listeners,
+    value: attributes && attributes.value !== undefined ? attributes.value : '',
+    checked: attributes && attributes.checked === true,
+    addEventListener: (name, handler) => { listeners[name] = handler; }
+  };
+}
+function find(node, predicate) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = find(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  }
+  if (!node || typeof node !== 'object') return null;
+  if (predicate(node)) return node;
+  return find(node.children, predicate);
+}
+function rowControl(root, label) {
+  const row = find(root, (node) => node.attributes && node.attributes.class === 'cbi-value' &&
+    find(node.children, (child) => child.tag === 'label' && child.children === label));
+  return row && find(row.children, (node) => node.tag === 'input');
+}
+global.location = { reload: () => {} };
+const factory = new Function('view', 'ui', 'api', 'E', '_', source);
+const module = factory(view, ui, api, element, (message) => message);
+const rendered = module.render({
+  enabled: true, work_mode: 'rulebot', domain_mode: 'registrable_domain', flush_interval: '5s',
+  storage: { mode: 'persistent' }, sources: [],
+  rule_bot: { enabled: true, endpoint: 'https://rule-bot.example/api/hidden', token_set: true, send_existing: false }
+});
+const token = rowControl(rendered, 'Token');
+const clear = rowControl(rendered, 'Clear existing token');
+const save = find(rendered, (node) => node.tag === 'button' && node.children === 'Save and apply');
+if (!token || token.value !== '' || token.attributes.placeholder !== 'Token configured; leave empty to preserve')
+  throw new Error('Rule-Bot token input must never prefill the stored token');
+token.value = 'replacement-token';
+token.listeners.input();
+clear.checked = true;
+clear.listeners.change();
+if (token.value !== '')
+  throw new Error('selecting token clear did not remove the newly entered token');
+token.value = 'replacement-token';
+token.listeners.input();
+Promise.resolve(save.attributes.click()).then(() => {
+  if (!saved || saved.rule_bot.token !== 'replacement-token' || saved.rule_bot.clear_token !== false)
+    throw new Error('Rule-Bot token was not submitted through save');
+}).catch((error) => { console.error(error); process.exitCode = 1; });
 NODE
 
 node - "$root/www/luci-static/resources/view/rule_bot_client/overview.js" <<'NODE'

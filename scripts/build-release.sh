@@ -32,8 +32,9 @@ build_archive() {
   mkdir -p "$root"
   TARGET_ARCH="$arch" TARGET_ARM="$arm" TARGET_MIPS="$mips" OUTPUT="$root/rule-bot-client" \
     sh scripts/build-one.sh
-  cp LICENSE README.md "$root/"
+  cp LICENSE README.md config.example.json "$root/"
   chmod 0755 "$root/rule-bot-client"
+  chmod 0600 "$root/config.example.json"
   tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
     -C dist -czf "dist/$package.tar.gz" "$package"
   rm -rf "$root"

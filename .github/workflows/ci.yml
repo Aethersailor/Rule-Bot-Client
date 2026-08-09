@@ -27,6 +27,9 @@ jobs:
           go-version-file: .go-version
           cache: false
 
+      - name: Validate documentation and deployment examples
+        run: node scripts/test-docs.js
+
       - name: Check formatting
         run: test -z "$(gofmt -l cmd internal)"
 
@@ -55,6 +58,19 @@ jobs:
           sh scripts/build-one.sh
           test "$(wc -c < dist/rule-bot-client)" -le 8388608
           dist/rule-bot-client --version | grep -F "commit=${GITHUB_SHA}"
+
+      - name: Verify Debian package configuration and permissions
+        run: |
+          sh scripts/package-deb.sh amd64 dist/rule-bot-client 0.0.0-ci dist
+          package_root=$(mktemp -d)
+          control_root=$(mktemp -d)
+          dpkg-deb -x dist/rule-bot-client_0.0.0-ci_amd64.deb "$package_root"
+          dpkg-deb -e dist/rule-bot-client_0.0.0-ci_amd64.deb "$control_root"
+          test "$(stat -c '%a' "$package_root/etc/rule-bot-client/config.json")" = "600"
+          grep -Fx /etc/rule-bot-client/config.json "$control_root/conffiles"
+          grep -F 'chown root:rule-bot-client /etc/rule-bot-client/config.json' "$control_root/postinst"
+          grep -F 'chmod 0640 /etc/rule-bot-client/config.json' "$control_root/postinst"
+          dist/rule-bot-client --config "$package_root/etc/rule-bot-client/config.json" --check
 
   cross-build:
     name: Build linux/${{ matrix.label }}
@@ -104,6 +120,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Validate Docker Compose configuration
+        run: docker compose -f compose.yaml config --quiet
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
@@ -128,14 +147,18 @@ jobs:
 
       - name: Verify locked-down persistent-volume startup
         run: |
-          install -d -m 0750 smoke-data
-          printf '%s\n' '{"version":1,"output":"/data/domains.txt","flush_interval":"50ms","instances":[{"name":"unreachable","url":"http://127.0.0.1:9","reconnect":{"initial_delay":"50ms","max_delay":"50ms"}}]}' > smoke-data/config.json
-          sudo chown -R 10001:10001 smoke-data
+          install -d -m 0755 smoke-data
+          sudo install -d -o 10001 -g 10001 -m 0750 smoke-data/data
+          printf '%s\n' '{"version":1,"output":"/data/data/domains.txt","flush_interval":"50ms","rule_bot":{"enabled":true,"endpoint":"https://rule-bot.invalid/hidden","token":"inline-token","state_file":"/data/data/rulebot-state.json","send_existing":false},"instances":[{"name":"unreachable","url":"http://127.0.0.1:9","secret":"inline-secret","reconnect":{"initial_delay":"50ms","max_delay":"50ms"}}]}' > /tmp/rule-bot-client-smoke-config.json
+          sudo install -o root -g 10001 -m 0640 /tmp/rule-bot-client-smoke-config.json smoke-data/config.json
+          test "$(stat -c '%U:%g %a' smoke-data/config.json)" = "root:10001 640"
+          test "$(stat -c '%u:%g %a' smoke-data/data)" = "10001:10001 750"
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci --check
           docker run -d --name rule-bot-client-smoke --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci
           sleep 2
           test "$(docker inspect -f '{{.State.Running}}' rule-bot-client-smoke)" = true
           docker stop -t 10 rule-bot-client-smoke
-          sudo test -f smoke-data/domains.txt
+          sudo test -f smoke-data/data/domains.txt
 
       - name: Print container logs on failure
         if: failure()
