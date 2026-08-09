@@ -1,55 +1,16 @@
-# Deployment assets
+# 部署资产
 
-## Docker Compose
+本目录保存与源码版本配套的部署配置，不再重复用户安装步骤。普通用户请直接阅读：
 
-Prepare the fixed `/opt` deployment directory before starting the container:
+- [Linux 与 Docker](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker)
+- [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)
 
-```sh
-sudo install -d -m 0755 /opt/rule-bot-client
-sudo install -d -o 10001 -g 10001 -m 0750 /opt/rule-bot-client/data
-sudo install -o root -g 10001 -m 0640 deploy/docker/config.json /opt/rule-bot-client/config.json
-sudo install -o root -g 10001 -m 0640 /path/to/controller.secret /opt/rule-bot-client/home.secret
-sudo install -m 0644 compose.yaml /opt/rule-bot-client/compose.yaml
-cd /opt/rule-bot-client
-docker compose up -d
-```
+| 路径 | 用途 |
+| --- | --- |
+| [`docker/config.json`](docker/config.json) | 与顶层 [`compose.yaml`](../compose.yaml) 配套的容器配置示例 |
+| [`systemd/config.json`](systemd/config.json) | Debian / systemd 配置示例 |
+| [`systemd/rule-bot-client.service`](systemd/rule-bot-client.service) | Debian 软件包使用的 systemd 单元 |
 
-The example uses one bind mount, `/opt/rule-bot-client:/data`. Configuration and
-secret files are readable by the image's `10001:10001` user, while collected
-domains are written under `/opt/rule-bot-client/data`. Container logs are rotated at
-1 MiB with two retained files.
+这些文件跟随当前分支演进。部署正式版本时，应使用对应 Release 标签下的同版本文件，不要混用 `master` 配置与旧版程序或镜像。
 
-The process exposes no port. The example deliberately uses host networking so
-it can reach a controller bound only to host loopback without exposing that
-controller on another host address.
-
-## Debian/systemd
-
-The release `.deb` creates the `rule-bot-client` system user, installs the binary and
-unit, and preserves `/etc/rule-bot-client/config.json` as administrator-owned
-configuration. For a manual tarball installation, install the files under
-`deploy/systemd/`, create the service user and `/var/lib/rule-bot-client`, then run:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now rule-bot-client
-```
-
-Secret files should be owned by `root:rule-bot-client` with mode `0640`.
-
-## OpenWrt
-
-OpenWrt is shipped only as the architecture-specific `luci-app-rule-bot-client` IPK or APK
-built by `.github/workflows/openwrt-packages.yml` with the matching official
-OpenWrt SDK. The single package contains the core binary, procd service, UCI
-configuration, adapter backend, authenticated LuCI/rpcd interface, initialization,
-backup/restore support, and the sysupgrade keep list. Do not install the generic
-Linux tarball on OpenWrt.
-
-After package installation, open **Services → Rule-Bot Client**. The package can
-discover OpenClash and Nikki and can run both alongside multiple manually
-configured Mihomo controllers. Generated runtime configuration, discovered
-controller secrets, and status remain under `/var/run/rule-bot-client`; durable
-configuration, credentials, certificates, output, and Rule-Bot state remain
-under `/etc` by default. An unavailable external `/mnt/...` storage target fails
-closed instead of falling back to Overlay.
+OpenWrt 的 LuCI、procd 和 UCI 打包源码位于 [`openwrt/package/luci-app-rule-bot-client`](../openwrt/package/luci-app-rule-bot-client)，正式用户只需安装 Release 中与系统系列和架构匹配的单包。

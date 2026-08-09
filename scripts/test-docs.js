@@ -223,22 +223,26 @@ function assertReleaseExampleContract() {
 			'scripts/build-release.sh: every Linux archive must include config.example.json');
 		requireMatch(archiveFunction[1], /chmod\s+0600\s+"\$root\/config\.example\.json"/,
 			'scripts/build-release.sh: archived config.example.json must use mode 0600');
+		requireMatch(archiveFunction[1], /\bcp\b[^\n]*\bPRIVACY\.md\b[^\n]*\bSECURITY\.md\b[^\n]*"\$root\/"/,
+			'scripts/build-release.sh: Linux archives must include linked privacy and security documents');
 	}
 	const releaseWorkflow = read('.github/workflows/release.yml');
 	requireMatch(releaseWorkflow,
-		/tar -tzf "\$archive" "\$package\/config\.example\.json"/,
+		/tar -tzf "\$archive"[\s\\]*"\$package\/config\.example\.json"/,
 		'.github/workflows/release.yml: release validation must inspect config.example.json in every Linux archive');
+	requireMatch(releaseWorkflow,
+		/tar -tzf "\$archive"[\s\S]*"\$package\/PRIVACY\.md"[\s\\]*"\$package\/SECURITY\.md"/,
+		'.github/workflows/release.yml: release validation must inspect linked privacy and security documents');
 	requireMatch(releaseWorkflow,
 		/tar -tvzf "\$archive" "\$package\/config\.example\.json"[\s\S]*-rw-------/,
 		'.github/workflows/release.yml: release validation must verify config.example.json mode 0600');
 }
 
-function assertDeploymentContracts(analyses) {
+function assertDeploymentContracts() {
 	const packageScript = read('scripts/package-deb.sh');
 	const systemdUnit = read('deploy/systemd/rule-bot-client.service');
 	const dockerfile = read('Dockerfile');
 	const compose = read('compose.yaml');
-	const docs = `${analyses.get('README.md').source}\n${analyses.get('deploy/README.md').source}`;
 
 	requireMatch(packageScript, /^\/etc\/rule-bot-client\/config\.json$/m,
 		'scripts/package-deb.sh: config.json must remain a dpkg conffile');
@@ -262,12 +266,6 @@ function assertDeploymentContracts(analyses) {
 	requireMatch(compose, /^\s*network_mode:\s*host\s*$/m,
 		'compose.yaml: host networking is required for a loopback Mihomo controller');
 
-	requireMatch(docs,
-		/install[^\n]*-o\s+10001[^\n]*-g\s+10001[^\n]*-m\s+0750[^\n]*\/opt\/rule-bot-client\/data/,
-		'documentation: Docker data directory must be created as 10001:10001 with mode 0750');
-	requireMatch(docs,
-		/install[^\n]*-o\s+root[^\n]*-g\s+10001[^\n]*-m\s+0640[^\n]*\/opt\/rule-bot-client\/config\.json/,
-		'documentation: Docker config must be installed as root:10001 with mode 0640');
 }
 
 const bundledConfigs = [
@@ -277,7 +275,13 @@ const bundledConfigs = [
 ];
 bundledConfigs.forEach(assertBundledConfig);
 
-const markdownFiles = [ 'README.md', 'deploy/README.md' ];
+const markdownFiles = [
+	'README.md',
+	'PRIVACY.md',
+	'SECURITY.md',
+	'DESIGN.md',
+	'deploy/README.md'
+];
 const analyses = new Map(markdownFiles.map((relativePath) => [ relativePath, markdownAnalysis(relativePath) ]));
 for (const relativePath of markdownFiles) {
 	const analysis = analyses.get(relativePath);
@@ -285,7 +289,7 @@ for (const relativePath of markdownFiles) {
 	assertBackupExamples(relativePath, analysis);
 }
 
-assertDeploymentContracts(analyses);
+assertDeploymentContracts();
 assertDesignCredentialContract();
 assertReleaseExampleContract();
 

@@ -108,8 +108,9 @@ acknowledgement/state-write crash safe.
 ## Security
 
 - Controller redirects are rejected so bearer credentials cannot cross hosts.
-- Environment proxy variables are ignored; controller and Rule-Bot connections
-  are direct, and redirects are rejected for both.
+- Controller traffic ignores environment proxy variables and remains direct.
+  Rule-Bot delivery is direct unless `proxy_url` or `proxy_from_environment` is
+  explicitly configured. Redirects are rejected for both connections.
 - Inline `secret` and `token` values are the default for ordinary deployments;
   protecting the main configuration file is sufficient.
 - `secret_file`, `token_file`, `secret_env`, and `token_env` remain advanced
