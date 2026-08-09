@@ -153,7 +153,7 @@ jobs:
           sudo install -o root -g 10001 -m 0640 /tmp/rule-bot-client-smoke-config.json smoke-data/config.json
           test "$(stat -c '%U:%g %a' smoke-data/config.json)" = "root:10001 640"
           test "$(stat -c '%u:%g %a' smoke-data/data)" = "10001:10001 750"
-          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci --check
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci --config /data/config.json --check
           docker run -d --name rule-bot-client-smoke --read-only --cap-drop ALL --security-opt no-new-privileges -v "$PWD/smoke-data:/data" rule-bot-client:ci
           sleep 2
           test "$(docker inspect -f '{{.State.Running}}' rule-bot-client-smoke)" = true
