@@ -241,16 +241,25 @@ function assertReleaseExampleContract() {
 function assertVisitorDeploymentGuidance() {
 	const readme = read('README.md');
 	requireMatch(readme,
+		/`MATCH`[^\n]{0,80}兜底规则|兜底规则[^\n]{0,80}`MATCH`/,
+		'README.md: MATCH must be explained as the Mihomo fallback rule');
+	requireMatch(readme,
+		/Mihomo 控制接口[\s\S]{0,160}HTTP 管理接口[\s\S]{0,160}`external-controller`[\s\S]{0,220}不是需要另行安装的程序[\s\S]{0,120}Controller/,
+		'README.md: Mihomo control interface must be explained in plain language and mapped to Controller');
+	requireMatch(readme,
+		/Rule-Bot[^\n]{0,40}可选[\s\S]{0,160}本地收集不需要 Rule-Bot/,
+		'README.md: Rule-Bot must be presented as optional for local collection');
+	requireMatch(readme,
 		/同一套网络通常只需部署一个 Rule-Bot Client[\s\S]{0,200}不需要在 OpenWrt 和 Linux 上各安装一份/,
 		'README.md: visitors must be told to choose one client deployment instead of installing on both OpenWrt and Linux');
 	requireMatch(readme,
-		/一个客户端[\s\S]{0,120}多个 Mihomo、OpenClash 或 Nikki 实例/,
+		/一个客户端[\s\S]{0,160}多个正在运行的 Mihomo 内核/,
 		'README.md: visitors must be told that one client can collect from multiple controllers');
 	requireMatch(readme,
 		/只有 OpenWrt 是唯一合适的常驻设备时[\s\S]{0,80}安装到 OpenWrt/,
 		'README.md: OpenWrt must remain the fallback when no suitable always-on Linux or Docker host exists');
 	requireMatch(readme,
-		/OpenWrt 包[\s\S]{0,120}不属于 OpenWrt 官方软件源[\s\S]{0,220}若软件包丢失[\s\S]{0,40}升级后重新安装/,
+		/OpenWrt 包[\s\S]{0,120}不属于 OpenWrt 官方软件源[\s\S]{0,300}软件包丢失后仍需重新安装/,
 		'README.md: visitors must see the OpenWrt package retention warning before choosing that deployment');
 }
 
@@ -316,4 +325,4 @@ if (failures.length) {
 	process.exit(1);
 }
 
-console.log(`test-docs: validated ${bundledConfigs.length} configs, ${markdownFiles.length} Markdown files, deployment permissions, design semantics, and release examples`);
+console.log(`test-docs: validated ${bundledConfigs.length} configs, ${markdownFiles.length} Markdown files, beginner-facing concepts, deployment permissions, design semantics, and release examples`);
