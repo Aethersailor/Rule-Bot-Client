@@ -48,19 +48,12 @@ Rule-Bot Client 不是代理客户端，也不会修改 Mihomo 配置。它不�
 <a id="它怎样工作"></a>
 ## 🔄 它怎样工作
 
-```mermaid
-flowchart LR
-    A["Mihomo 日志和当前连接"] --> B["Rule-Bot Client"]
-    B -->|"保留 MATCH 域名"| C["本地域名清单"]
-    B -. "可选发送" .-> D["Rule-Bot"]
-    D -. "检查通过后" .-> E["GitHub 规则仓库"]
-    classDef source fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
-    classDef client fill:#ede7f6,stroke:#673ab7,color:#311b92
-    classDef result fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
-    class A source
-    class B client
-    class C,D,E result
-```
+| ① 数据来源 | ② 客户端处理 | ③ 默认结果 |
+|:---:|:---:|:---:|
+| Mihomo 日志和当前连接 | Rule-Bot Client 筛选最终由 `MATCH` 处理的域名 | 保存到本地域名清单 |
+
+> [!NOTE]
+> 启用可选的 Rule-Bot 后，客户端还会把域名发送给 Rule-Bot 检查；通过检查的域名才会进入 GitHub 规则仓库。
 
 Rule-Bot 发送功能默认关闭。只使用本地收集时，域名不会发送给 Rule-Bot。
 
