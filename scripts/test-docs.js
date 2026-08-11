@@ -238,6 +238,22 @@ function assertReleaseExampleContract() {
 		'.github/workflows/release.yml: release validation must verify config.example.json mode 0600');
 }
 
+function assertVisitorDeploymentGuidance() {
+	const readme = read('README.md');
+	requireMatch(readme,
+		/同一套网络通常只需部署一个 Rule-Bot Client[\s\S]{0,200}不需要在 OpenWrt 和 Linux 上各安装一份/,
+		'README.md: visitors must be told to choose one client deployment instead of installing on both OpenWrt and Linux');
+	requireMatch(readme,
+		/一个客户端[\s\S]{0,120}多个 Mihomo、OpenClash 或 Nikki 实例/,
+		'README.md: visitors must be told that one client can collect from multiple controllers');
+	requireMatch(readme,
+		/只有 OpenWrt 是唯一合适的常驻设备时[\s\S]{0,80}安装到 OpenWrt/,
+		'README.md: OpenWrt must remain the fallback when no suitable always-on Linux or Docker host exists');
+	requireMatch(readme,
+		/OpenWrt 包[\s\S]{0,120}不属于 OpenWrt 官方软件源[\s\S]{0,220}若软件包丢失[\s\S]{0,40}升级后重新安装/,
+		'README.md: visitors must see the OpenWrt package retention warning before choosing that deployment');
+}
+
 function assertDeploymentContracts() {
 	const packageScript = read('scripts/package-deb.sh');
 	const systemdUnit = read('deploy/systemd/rule-bot-client.service');
@@ -292,6 +308,7 @@ for (const relativePath of markdownFiles) {
 assertDeploymentContracts();
 assertDesignCredentialContract();
 assertReleaseExampleContract();
+assertVisitorDeploymentGuidance();
 
 if (failures.length) {
 	for (const failure of failures)

@@ -9,7 +9,7 @@ Rule-Bot Client 用来收集 Mihomo 最终落入 `MATCH` 规则的域名。收�
 - 找出当前规则没有覆盖、最终交给 `MATCH` 处理的域名。
 - 将结果整理成去重后的本地域名清单，便于查看和后续处理。
 - 可选接入 Rule-Bot，由服务端继续检查规则、GeoSite 和域名策略，再决定是否写入 GitHub 规则仓库。
-- 在 OpenWrt 上通过 LuCI 管理 OpenClash、Nikki 或手工添加的 Mihomo 外部控制器（Controller）。
+- 同时监听一个或多个 Mihomo 外部控制器（Controller），包括 OpenClash、Nikki 和手工添加的 Mihomo 实例。
 
 Rule-Bot Client 不是代理客户端，也不会修改 Mihomo 配置。它不记录 URL 路径、查询参数、网页内容或应用名称，也不能代替完整的流量审计工具。
 
@@ -34,21 +34,34 @@ Rule-Bot 投递默认关闭。仅本地收集时，域名不会发送给 Rule-Bo
 
 Rule-Bot 不是本地收集的前置条件。建议先完成本地收集和连接测试，再决定是否接入 Rule-Bot。
 
+## 只选择一个部署位置
+
+> [!IMPORTANT]
+> 同一套网络通常只需部署一个 Rule-Bot Client，不需要在 OpenWrt 和 Linux 上各安装一份。只要部署位置能够访问各个 Controller，一个客户端就能同时采集多个 Mihomo、OpenClash 或 Nikki 实例的数据，并将结果统一去重。
+
+优先选择能够长期运行、且可以访问各个 Controller 的 Linux、NAS 或其他 Docker 设备。只有 OpenWrt 是唯一合适的常驻设备时，再把客户端安装到 OpenWrt。仅当网络相互隔离，没有任何一个部署位置能够访问全部 Controller 时，才需要部署多个客户端。
+
 ## 选择安装方式
 
 | 使用环境 | 推荐方式 | 说明 |
 | --- | --- | --- |
-| OpenWrt 24.10 或 25.12 | LuCI 单包 | 支持 `x86_64`、`aarch64_generic`、`mips_24kc` 和 `mipsel_24kc`，安装后使用 Web 界面配置 |
+| 已安装 Docker 的 Linux 或 NAS | Docker Compose | 镜像支持 `linux/amd64` 和 `linux/arm64`，无需映射端口 |
 | Debian 或 Ubuntu | `.deb` 软件包 | 支持 `amd64`、`arm64` 和 `armhf`，使用 systemd 运行 |
-| 其他 Linux | Docker Compose | 镜像支持 `linux/amd64` 和 `linux/arm64`，无需映射端口 |
 | 不使用 Docker 的 Linux | 原生二进制 | Releases 提供 AMD64、386、ARM、MIPS、MIPS64、RISC-V 等构建 |
+| 只有 OpenWrt 常驻设备 | LuCI 单包 | 支持 OpenWrt 24.10 和 25.12 的四种常见架构，安装后使用 Web 界面配置 |
 
 当前没有 Windows 或 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 单包，不要安装通用 Linux 压缩包。
 
-### OpenWrt 快速安装
+### 推荐：Linux 与 Docker
+
+Debian 软件包、Docker Compose 和原生二进制的完整步骤见 [Linux 与 Docker](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker)。Linux 版本没有 Web 界面，使用 JSON 配置文件，并通过日志和输出文件确认状态。
+
+### 只有 OpenWrt 设备时
 
 > [!WARNING]
-> OpenWrt 软件包安装后会启用服务并尝试启动，默认自动发现 OpenClash 并使用「仅本地收集」。Rule-Bot 默认关闭，不会自动外发。运行安装命令前，应先确认允许在这台路由器上收集域名。
+> OpenWrt 包由本项目通过 GitHub Releases 发布，不属于 OpenWrt 官方软件源。固件升级不能保证保留或自动重装该包；如果新固件中没有它，LuCI 页面、服务和程序会消失。在保留设置且保留清单完整时，配置和默认持久化数据可以继续保留，但若软件包丢失，仍需在升级后重新安装。详见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97#%E5%A4%87%E4%BB%BD%E4%B8%8E%E5%9B%BA%E4%BB%B6%E5%8D%87%E7%BA%A7)。
+
+软件包安装后会启用服务并尝试启动，默认自动发现 OpenClash 并使用「仅本地收集」。Rule-Bot 默认关闭，不会自动外发。运行安装命令前，应先确认允许在这台路由器上收集域名。
 
 在 OpenWrt SSH 终端中下载正式 Release 提供的统一安装脚本。脚本会识别包管理器、系统版本和架构，并在安装前校验软件包大小与 SHA-256：
 
@@ -60,10 +73,6 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 ```
 
 安装完成后，打开「服务 → Rule-Bot Client」。连接 Controller、选择工作模式和验证结果的步骤见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)。
-
-### Linux 与 Docker
-
-Debian 软件包、Docker Compose 和原生二进制的完整步骤见 [Linux 与 Docker](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker)。Linux 版本没有 Web 界面，使用 JSON 配置文件，并通过日志和输出文件确认状态。
 
 ## 怎样确认已经正常工作
 
