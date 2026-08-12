@@ -6,9 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to backfill to Docker Hub
+        description: Existing published release tag
         required: true
         type: string
+      operation:
+        description: Maintenance operation
+        required: true
+        default: dockerhub-backfill
+        type: choice
+        options:
+          - dockerhub-backfill
+          - cleanup-ghcr-alias
 
 permissions:
   contents: read
@@ -136,7 +144,8 @@ jobs:
     if: >-
       always() &&
       needs.preflight.result == 'success' &&
-      (needs.assets.result == 'success' || github.event_name == 'workflow_dispatch')
+      (needs.assets.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && inputs.operation == 'dockerhub-backfill'))
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -229,6 +238,145 @@ jobs:
             test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "${{ needs.preflight.outputs.version }}"
             test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.created" }}')" = "${{ needs.preflight.outputs.build_date }}"
           done
+
+  cleanup:
+    name: Remove legacy GHCR minor-version alias
+    needs: preflight
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cleanup-ghcr-alias'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Recreate the release index without its redundant alias
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+
+          version=${RELEASE_TAG#v}
+          case "$version" in
+            *-*) echo "Pre-release versions do not have a legacy minor alias" >&2; exit 1 ;;
+          esac
+          minor=${version%.*}
+          image_path=${GITHUB_REPOSITORY,,}
+          image="ghcr.io/$image_path"
+          package=rule-bot-client
+          accept='application/vnd.oci.image.index.v1+json'
+
+          registry_auth=$(printf '%s' "$GITHUB_ACTOR:$GH_TOKEN" | base64 -w0)
+          registry_token=$(
+            curl -fsSL -H "Authorization: Basic $registry_auth" \
+              --get \
+              --data-urlencode service=ghcr.io \
+              --data-urlencode "scope=repository:$image_path:pull,push" \
+              https://ghcr.io/token |
+              jq -er '.token // .access_token'
+          )
+
+          curl -fsSL -D manifest-headers.txt \
+            -H "Authorization: Bearer $registry_token" \
+            -H "Accept: $accept" \
+            "https://ghcr.io/v2/$image_path/manifests/$version" \
+            -o manifest.json
+          digest=$(awk 'BEGIN { IGNORECASE=1 } /^Docker-Content-Digest:/ { gsub("\r", ""); print $2; exit }' manifest-headers.txt)
+          media_type=$(awk 'BEGIN { IGNORECASE=1 } /^Content-Type:/ { gsub("\r", ""); print $2; exit }' manifest-headers.txt)
+          calculated="sha256:$(sha256sum manifest.json | cut -d' ' -f1)"
+          test -n "$digest"
+          test "$calculated" = "$digest"
+          jq -e '
+            .mediaType == "application/vnd.oci.image.index.v1+json" and
+            ([.manifests[].platform | "\(.os)/\(.architecture)"] | sort == ["linux/amd64", "linux/arm64"])
+          ' manifest.json
+
+          version_id=$(
+            gh api --paginate \
+              "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions?per_page=100" \
+              --jq ".[] | select(.name == \"$digest\") | .id"
+          )
+          test "$(printf '%s\n' "$version_id" | grep -c .)" -eq 1
+          mapfile -t original_tags < <(
+            gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id" \
+              --jq '.metadata.container.tags[]'
+          )
+
+          has_tag() {
+            printf '%s\n' "${original_tags[@]}" | grep -Fxq "$1"
+          }
+          has_tag "$version"
+          has_tag "$minor"
+          for tag in "${original_tags[@]}"; do
+            case "$tag" in
+              "$version"|"$minor"|latest) ;;
+              *) echo "Unexpected tag on $digest: $tag" >&2; exit 1 ;;
+            esac
+          done
+
+          retained_tags=("$version")
+          if has_tag latest; then
+            retained_tags+=(latest)
+          fi
+
+          put_manifest() {
+            curl -fsS --fail-with-body -X PUT \
+              -H "Authorization: Bearer $registry_token" \
+              -H "Content-Type: $media_type" \
+              --data-binary @manifest.json \
+              "https://ghcr.io/v2/$image_path/manifests/$1" >/dev/null
+          }
+          resolve_digest() {
+            curl -fsSL -D - -o /dev/null \
+              -H "Authorization: Bearer $registry_token" \
+              -H "Accept: $accept" \
+              "https://ghcr.io/v2/$image_path/manifests/$1" |
+              awk 'BEGIN { IGNORECASE=1 } /^Docker-Content-Digest:/ { gsub("\r", ""); print $2; exit }'
+          }
+          resolve_status() {
+            curl -sS -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $registry_token" \
+              -H "Accept: $accept" \
+              "https://ghcr.io/v2/$image_path/manifests/$1"
+          }
+
+          deleted=false
+          rollback() {
+            status=$?
+            if test "$status" -ne 0 && test "$deleted" = true; then
+              set +e
+              rollback_ok=true
+              for tag in "${original_tags[@]}"; do
+                put_manifest "$tag" || rollback_ok=false
+              done
+              if test "$rollback_ok" != true; then
+                gh api --method POST \
+                  "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id/restore" || true
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          gh api --method DELETE \
+            "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id"
+          deleted=true
+          for attempt in $(seq 1 20); do
+            test "$(resolve_status "$version")" = 404 && break
+            sleep 1
+          done
+          test "$(resolve_status "$version")" = 404
+
+          for tag in "${retained_tags[@]}"; do
+            put_manifest "$tag"
+          done
+          for tag in "${retained_tags[@]}"; do
+            test "$(resolve_digest "$tag")" = "$digest"
+          done
+          test "$(resolve_status "$minor")" = 404
+          trap - EXIT
+
+          echo "Removed redundant GHCR alias $minor from $image@$digest"
+          echo "Retained tags: ${retained_tags[*]}"
 
   publish:
     name: Publish draft release
