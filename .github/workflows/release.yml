@@ -291,7 +291,8 @@ jobs:
           ' manifest.json
 
           gh_api_retry() {
-            output=$1
+            local output=$1
+            local attempt
             shift
             for attempt in 1 2 3; do
               if gh api "$@" >"$output"; then
@@ -350,6 +351,35 @@ jobs:
               -H "Accept: $accept" \
               "https://ghcr.io/v2/$image_path/manifests/$1"
           }
+          wait_for_status() {
+            local tag=$1
+            local expected=$2
+            local attempt current
+            for attempt in $(seq 1 30); do
+              current=$(resolve_status "$tag")
+              if test "$current" = "$expected"; then
+                echo "$tag returned HTTP $expected"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$tag returned HTTP $current, expected $expected" >&2
+            return 1
+          }
+          wait_for_digest() {
+            local tag=$1
+            local attempt current
+            for attempt in $(seq 1 30); do
+              current=$(resolve_digest "$tag" 2>/dev/null || true)
+              if test "$current" = "$digest"; then
+                echo "$tag resolved to $digest"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$tag resolved to ${current:-nothing}, expected $digest" >&2
+            return 1
+          }
 
           deleted=false
           rollback() {
@@ -372,19 +402,15 @@ jobs:
           gh api --method DELETE \
             "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id"
           deleted=true
-          for attempt in $(seq 1 20); do
-            test "$(resolve_status "$version")" = 404 && break
-            sleep 1
-          done
-          test "$(resolve_status "$version")" = 404
+          wait_for_status "$version" 404
 
           for tag in "${retained_tags[@]}"; do
             put_manifest "$tag"
           done
           for tag in "${retained_tags[@]}"; do
-            test "$(resolve_digest "$tag")" = "$digest"
+            wait_for_digest "$tag"
           done
-          test "$(resolve_status "$minor")" = 404
+          wait_for_status "$minor" 404
           trap - EXIT
 
           echo "Removed redundant GHCR alias $minor from $image@$digest"
