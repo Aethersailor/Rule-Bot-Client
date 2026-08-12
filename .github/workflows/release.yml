@@ -410,7 +410,28 @@ jobs:
           for tag in "${retained_tags[@]}"; do
             wait_for_digest "$tag"
           done
-          wait_for_status "$minor" 404
+
+          active_version_id=''
+          for attempt in $(seq 1 30); do
+            gh_api_retry active-version-id.txt --paginate \
+              "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions?per_page=100" \
+              --jq ".[] | select(.name == \"$digest\") | .id"
+            active_version_id=$(cat active-version-id.txt)
+            test "$(printf '%s\n' "$active_version_id" | grep -c .)" -eq 1 && break
+            sleep 1
+          done
+          test "$(printf '%s\n' "$active_version_id" | grep -c .)" -eq 1
+          gh_api_retry active-tags.txt \
+            "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$active_version_id" \
+            --jq '.metadata.container.tags[]'
+          mapfile -t active_tags <active-tags.txt
+          test "${#active_tags[@]}" -eq "${#retained_tags[@]}"
+          for tag in "${retained_tags[@]}"; do
+            printf '%s\n' "${active_tags[@]}" | grep -Fxq "$tag"
+          done
+
+          minor_status=$(resolve_status "$minor")
+          echo "$minor returned HTTP $minor_status immediately after cleanup; GHCR may briefly cache the old tag"
           trap - EXIT
 
           echo "Removed redundant GHCR alias $minor from $image@$digest"
