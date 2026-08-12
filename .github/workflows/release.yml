@@ -290,16 +290,28 @@ jobs:
             ([.manifests[].platform | "\(.os)/\(.architecture)"] | sort == ["linux/amd64", "linux/arm64"])
           ' manifest.json
 
-          version_id=$(
-            gh api --paginate \
-              "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions?per_page=100" \
-              --jq ".[] | select(.name == \"$digest\") | .id"
-          )
+          gh_api_retry() {
+            output=$1
+            shift
+            for attempt in 1 2 3; do
+              if gh api "$@" >"$output"; then
+                return 0
+              fi
+              test "$attempt" -lt 3
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          gh_api_retry version-id.txt --paginate \
+            "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions?per_page=100" \
+            --jq ".[] | select(.name == \"$digest\") | .id"
+          version_id=$(cat version-id.txt)
           test "$(printf '%s\n' "$version_id" | grep -c .)" -eq 1
-          mapfile -t original_tags < <(
-            gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id" \
-              --jq '.metadata.container.tags[]'
-          )
+          gh_api_retry original-tags.txt \
+            "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package/versions/$version_id" \
+            --jq '.metadata.container.tags[]'
+          mapfile -t original_tags <original-tags.txt
 
           has_tag() {
             printf '%s\n' "${original_tags[@]}" | grep -Fxq "$1"
@@ -319,7 +331,7 @@ jobs:
           fi
 
           put_manifest() {
-            curl -fsS --fail-with-body -X PUT \
+            curl -sS --fail-with-body -X PUT \
               -H "Authorization: Bearer $registry_token" \
               -H "Content-Type: $media_type" \
               --data-binary @manifest.json \
