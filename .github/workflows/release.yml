@@ -3,12 +3,18 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to backfill to Docker Hub
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -17,6 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.identity.outputs.commit }}
       build_date: ${{ steps.identity.outputs.build_date }}
       image: ${{ steps.identity.outputs.image }}
     steps:
@@ -29,24 +36,35 @@ jobs:
         id: identity
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          case "$GITHUB_REF_NAME" in
+          case "$RELEASE_TAG" in
             v0.0.0|v0.0.0-*) echo "0.0.0 is not a releasable version" >&2; exit 1 ;;
           esac
-          printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+          printf '%s' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
           git fetch --no-tags origin master
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/master
-          draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .draft 2>/dev/null || true)
-          test "$draft" != false
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          release_sha=$(git rev-list -n 1 "$RELEASE_TAG")
+          test -n "$release_sha"
+          git merge-base --is-ancestor "$release_sha" origin/master
+          draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft 2>/dev/null || true)
+          if test "$GITHUB_EVENT_NAME" = workflow_dispatch; then
+            test "$draft" = false
+          else
+            test "$release_sha" = "$GITHUB_SHA"
+            test "$draft" != false
+          fi
           {
-            echo "version=$GITHUB_REF_NAME"
-            echo "build_date=$(git show -s --format=%cI "$GITHUB_SHA")"
+            echo "version=$RELEASE_TAG"
+            echo "commit=$release_sha"
+            echo "build_date=$(git show -s --format=%cI "$release_sha")"
             echo "image=ghcr.io/${GITHUB_REPOSITORY,,}"
           } >> "$GITHUB_OUTPUT"
 
   assets:
     name: Build and attest release assets
     needs: preflight
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -57,6 +75,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.commit }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -73,7 +92,7 @@ jobs:
       - name: Build deterministic archives and packages
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
-          COMMIT: ${{ github.sha }}
+          COMMIT: ${{ needs.preflight.outputs.commit }}
           BUILD_DATE: ${{ needs.preflight.outputs.build_date }}
         run: sh scripts/build-release.sh
 
@@ -114,6 +133,10 @@ jobs:
   image:
     name: Publish and verify container image
     needs: [preflight, assets]
+    if: >-
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.assets.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -125,26 +148,38 @@ jobs:
     steps:
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.commit }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to GHCR
+        if: github.event_name == 'push'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Generate image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ needs.preflight.outputs.image }}
+          images: |
+            name=${{ needs.preflight.outputs.image }},enable=${{ github.event_name == 'push' }}
+            name=${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
+          flavor: |
+            latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},value=${{ needs.preflight.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(needs.preflight.outputs.version, '-') }}
 
       - name: Build and push exact two-platform image
         id: build
@@ -158,10 +193,11 @@ jobs:
           sbom: false
           build-args: |
             VERSION=${{ needs.preflight.outputs.version }}
-            COMMIT=${{ github.sha }}
+            COMMIT=${{ needs.preflight.outputs.commit }}
             BUILD_DATE=${{ needs.preflight.outputs.build_date }}
 
       - name: Attest image digest
+        if: github.event_name == 'push'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ needs.preflight.outputs.image }}
@@ -170,18 +206,29 @@ jobs:
 
       - name: Verify digest and exact platform index
         env:
-          IMAGE: ${{ needs.preflight.outputs.image }}@${{ steps.build.outputs.digest }}
+          COMMIT: ${{ needs.preflight.outputs.commit }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
+          GHCR_IMAGE: ${{ needs.preflight.outputs.image }}
+          PUBLISH_GHCR: ${{ github.event_name == 'push' }}
         run: |
-          docker buildx imagetools inspect "$IMAGE" --raw > manifest.json
-          jq -e '
-            [.manifests[].platform | select(.os != "linux" or (.architecture != "amd64" and .architecture != "arm64"))] | length == 0
-          ' manifest.json
-          jq -e '[.manifests[].platform | "\(.os)/\(.architecture)"] | sort == ["linux/amd64", "linux/arm64"]' manifest.json
-          docker run --rm --platform linux/amd64 "$IMAGE" --version | tee version.txt
-          grep -F "rule-bot-client ${{ needs.preflight.outputs.version }} commit=${GITHUB_SHA}" version.txt
-          test "$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
-          test "$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "${{ needs.preflight.outputs.version }}"
-          test "$(docker image inspect "$IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.created" }}')" = "${{ needs.preflight.outputs.build_date }}"
+          images=("$DOCKERHUB_IMAGE")
+          if test "$PUBLISH_GHCR" = true; then
+            images+=("$GHCR_IMAGE")
+          fi
+          for image in "${images[@]}"; do
+            reference="$image@$DIGEST"
+            docker buildx imagetools inspect "$reference" --raw > manifest.json
+            jq -e '
+              [.manifests[].platform | select(.os != "linux" or (.architecture != "amd64" and .architecture != "arm64"))] | length == 0
+            ' manifest.json
+            jq -e '[.manifests[].platform | "\(.os)/\(.architecture)"] | sort == ["linux/amd64", "linux/arm64"]' manifest.json
+            docker run --rm --platform linux/amd64 "$reference" --version | tee version.txt
+            grep -F "rule-bot-client ${{ needs.preflight.outputs.version }} commit=$COMMIT" version.txt
+            test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$COMMIT"
+            test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "${{ needs.preflight.outputs.version }}"
+            test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.created" }}')" = "${{ needs.preflight.outputs.build_date }}"
+          done
 
   publish:
     name: Publish draft release
