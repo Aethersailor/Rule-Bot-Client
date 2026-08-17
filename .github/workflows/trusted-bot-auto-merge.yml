@@ -1,0 +1,138 @@
+name: Trusted bot auto-merge
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Security
+      - OpenWrt Packages
+    types:
+      - completed
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  pull-requests: write
+  security-events: read
+
+concurrency:
+  group: trusted-bot-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile trusted bot PRs
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Merge one fully validated trusted bot PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          default_branch=$(gh repo view "$REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          mapfile -t pull_requests < <(
+            gh api --paginate \
+              "repos/$REPOSITORY/pulls?state=open&base=$default_branch&sort=created&direction=asc&per_page=100" \
+              --jq '.[].number'
+          )
+
+          for pull_number in "${pull_requests[@]}"; do
+            pull=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
+            author=$(jq -r '.user.login' <<<"$pull")
+            base_ref=$(jq -r '.base.ref' <<<"$pull")
+            head_ref=$(jq -r '.head.ref' <<<"$pull")
+            head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$pull")
+            head_sha=$(jq -r '.head.sha' <<<"$pull")
+            title=$(jq -r '.title' <<<"$pull")
+
+            test "$(jq -r '.state' <<<"$pull")" = open || continue
+            test "$(jq -r '.draft' <<<"$pull")" = false || continue
+            test "$base_ref" = "$default_branch" || continue
+            test "$head_repo" = "$REPOSITORY" || continue
+
+            trusted_kind=
+            if test "$author" = 'dependabot[bot]' && [[ "$head_ref" == dependabot/* ]]; then
+              jq -e 'any(.labels[]?; .name == "automerge")' <<<"$pull" >/dev/null || continue
+              [[ "$title" =~ ^(build|fix)\(deps\):[[:space:]] ]] || continue
+              trusted_kind=dependabot
+            elif test "$author" = 'github-advanced-security[bot]' && \
+                 [[ "$head_ref" =~ ^copilot/fix-code-scanning-alerts-[0-9]+$ ]]; then
+              trusted_kind=codeql
+            else
+              continue
+            fi
+
+            runs=$(gh api "repos/$REPOSITORY/actions/runs?event=pull_request&head_sha=$head_sha&per_page=100")
+            gates_ok=true
+            for workflow in CI Security 'OpenWrt Packages'; do
+              if ! jq -e \
+                --arg workflow "$workflow" \
+                --arg sha "$head_sha" \
+                --argjson pull_number "$pull_number" \
+                '[.workflow_runs[] |
+                  select(.name == $workflow and .head_sha == $sha) |
+                  select(any(.pull_requests[]?; .number == $pull_number))] |
+                 sort_by(.id) | last |
+                 .status == "completed" and .conclusion == "success"' \
+                <<<"$runs" >/dev/null; then
+                gates_ok=false
+                break
+              fi
+            done
+            test "$gates_ok" = true || continue
+
+            checks=$(gh api "repos/$REPOSITORY/commits/$head_sha/check-runs?filter=latest&per_page=100")
+            jq -e '
+              [.check_runs[] |
+                select(.status != "completed" or
+                  (.conclusion != "success" and
+                   .conclusion != "neutral" and
+                   .conclusion != "skipped"))] |
+              length == 0
+            ' <<<"$checks" >/dev/null || continue
+
+            if test "$trusted_kind" = codeql; then
+              open_alerts=$(gh api --paginate --slurp -X GET \
+                "repos/$REPOSITORY/code-scanning/alerts" \
+                -f state=open \
+                -f ref="refs/pull/$pull_number/merge" \
+                -f per_page=100 | jq '[.[][]] | length')
+              test "$open_alerts" -eq 0 || continue
+              commit_title="fix(security): apply CodeQL autofix (#$pull_number)"
+            else
+              commit_title="$title (#$pull_number)"
+            fi
+
+            latest=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
+            test "$(jq -r '.state' <<<"$latest")" = open || continue
+            test "$(jq -r '.draft' <<<"$latest")" = false || continue
+            test "$(jq -r '.user.login' <<<"$latest")" = "$author" || continue
+            test "$(jq -r '.base.ref' <<<"$latest")" = "$default_branch" || continue
+            test "$(jq -r '.head.repo.full_name // ""' <<<"$latest")" = "$REPOSITORY" || continue
+            test "$(jq -r '.head.sha' <<<"$latest")" = "$head_sha" || continue
+            test "$(jq -r '.mergeable' <<<"$latest")" = true || continue
+
+            merged=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
+              -f merge_method=squash \
+              -f sha="$head_sha" \
+              -f commit_title="$commit_title")
+            jq -e '.merged == true' <<<"$merged" >/dev/null
+
+            # GITHUB_TOKEN merges do not emit ordinary push-triggered workflow runs.
+            # Dispatch the three canonical master checks explicitly.
+            gh workflow run ci.yml --repo "$REPOSITORY" --ref "$default_branch"
+            gh workflow run security.yml --repo "$REPOSITORY" --ref "$default_branch"
+            gh workflow run openwrt-packages.yml --repo "$REPOSITORY" --ref "$default_branch"
+            echo "Merged trusted bot PR #$pull_number at $head_sha"
+            exit 0
+          done
+
+          echo "No fully validated trusted bot PR is ready to merge"

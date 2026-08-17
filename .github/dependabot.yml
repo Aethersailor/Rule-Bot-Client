@@ -3,5 +3,71 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: cron
+      cronjob: "20 4 * * *"
+      timezone: Asia/Shanghai
+    cooldown:
+      default-days: 0
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - automerge
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      all-actions:
+        patterns:
+          - "*"
+        update-types:
+          - major
+          - minor
+          - patch
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "25 4 * * *"
+      timezone: Asia/Shanghai
+    cooldown:
+      default-days: 0
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - automerge
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      all-go-modules:
+        patterns:
+          - "*"
+        update-types:
+          - major
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "30 4 * * *"
+      timezone: Asia/Shanghai
+    cooldown:
+      default-days: 0
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - automerge
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      all-images:
+        patterns:
+          - "*"
+        update-types:
+          - major
+          - minor
+          - patch

@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: .go-version
+          go-version: stable
           cache: false
 
       - name: Validate documentation and deployment examples
@@ -99,7 +99,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: .go-version
+          go-version: stable
           cache: false
 
       - name: Cross-compile
