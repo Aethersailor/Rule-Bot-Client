@@ -26,7 +26,11 @@ concurrency:
 jobs:
   reconcile:
     name: Reconcile trusted bot PRs
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'push' ||
+      github.event.workflow_run.event == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - name: Merge one fully validated trusted bot PR
@@ -38,6 +42,21 @@ jobs:
           set -euo pipefail
 
           default_branch=$(gh repo view "$REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          default_sha=$(gh api "repos/$REPOSITORY/commits/$default_branch" --jq '.sha')
+          base_runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$default_sha&per_page=100")
+          for workflow in CI Security 'OpenWrt Packages'; do
+            if ! jq -e \
+              --arg workflow "$workflow" \
+              --arg sha "$default_sha" \
+              '[.workflow_runs[] | select(.name == $workflow and .head_sha == $sha)] |
+               sort_by(.id) | last |
+               .status == "completed" and .conclusion == "success"' \
+              <<<"$base_runs" >/dev/null; then
+              echo "Default branch $default_sha is not yet green in $workflow"
+              exit 0
+            fi
+          done
+
           mapfile -t pull_requests < <(
             gh api --paginate \
               "repos/$REPOSITORY/pulls?state=open&base=$default_branch&sort=created&direction=asc&per_page=100" \
@@ -120,10 +139,13 @@ jobs:
             test "$(jq -r '.head.sha' <<<"$latest")" = "$head_sha" || continue
             test "$(jq -r '.mergeable' <<<"$latest")" = true || continue
 
-            merged=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
+            if ! merged=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
               -f merge_method=squash \
               -f sha="$head_sha" \
-              -f commit_title="$commit_title")
+              -f commit_title="$commit_title" 2>&1); then
+              echo "Merge of PR #$pull_number was deferred: $merged" >&2
+              continue
+            fi
             jq -e '.merged == true' <<<"$merged" >/dev/null
 
             # GITHUB_TOKEN merges do not emit ordinary push-triggered workflow runs.
