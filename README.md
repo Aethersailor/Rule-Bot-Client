@@ -178,4 +178,4 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 
 使用问题或功能建议可以提交到 [GitHub Issues](https://github.com/Aethersailor/Rule-Bot-Client/issues)。公开反馈前，请移除访问令牌、Mihomo 控制接口密钥、私有地址和真实域名清单。
 
-本项目采用 [GNU General Public License v3.0](LICENSE)。
+本项目采用 [GNU Affero General Public License v3.0](LICENSE)。

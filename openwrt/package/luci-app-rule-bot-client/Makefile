@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=luci-app-rule-bot-client
 PKG_VERSION:=$(if $(RULE_BOT_CLIENT_VERSION),$(RULE_BOT_CLIENT_VERSION),0.1.0)
 PKG_RELEASE:=1
-PKG_LICENSE:=GPL-3.0-only
+PKG_LICENSE:=AGPL-3.0-only
 PKG_MAINTAINER:=Aethersailor
 PKG_BUILD_DEPENDS:=luci-base/host
 
