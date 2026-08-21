@@ -208,6 +208,77 @@ func TestRuleBotSenderRetriesAndPersistsOffset(t *testing.T) {
 	}
 }
 
+func TestRuleBotSenderAdvancesPastTerminalInvalidDomain(t *testing.T) {
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Domain string `json:"domain"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		switch requests.Add(1) {
+		case 1:
+			if body.Domain != "example.com" {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			writer.WriteHeader(http.StatusBadRequest)
+			io.WriteString(writer, `{"version":1,"status":"invalid_domain"}`)
+		case 2:
+			if body.Domain != "example.net" {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			io.WriteString(writer, `{"version":1,"status":"exists_rules"}`)
+		default:
+			writer.WriteHeader(http.StatusTooManyRequests)
+		}
+	}))
+	defer server.Close()
+
+	directory := t.TempDir()
+	outputPath := filepath.Join(directory, "domains.txt")
+	statePath := filepath.Join(directory, "rulebot-state.json")
+	store, _, err := openOutput(outputPath, 10*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	sender, err := openRuleBotSender(RuleBotConfig{
+		Enabled:   true,
+		Endpoint:  server.URL + "/hidden",
+		Token:     "test-token",
+		StateFile: statePath,
+	}, outputPath, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sender.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() { result <- sender.Run(ctx, log.New(io.Discard, "", 0)) }()
+	writes := make(chan string, 2)
+	writes <- "missing.example.com"
+	writes <- "next.example.net"
+	close(writes)
+	if err := store.Run(writes); err != nil {
+		t.Fatal(err)
+	}
+	wantOffset := int64(len("missing.example.com\nnext.example.net\n"))
+	waitForRuleBotOffset(t, statePath, wantOffset)
+	cancel()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("requests = %d", requests.Load())
+	}
+}
+
 func TestRuleBotTerminalStatusContract(t *testing.T) {
 	want := map[string]int{
 		"added":           http.StatusCreated,
