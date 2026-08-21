@@ -136,8 +136,10 @@ jobs:
           go-version: stable
           cache: false
 
-      - name: Install SDK extraction tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends jq zstd
+      - name: Verify SDK extraction tools
+        run: |
+          command -v jq
+          command -v zstd
 
       - name: Resolve version and official SDK
         id: identity

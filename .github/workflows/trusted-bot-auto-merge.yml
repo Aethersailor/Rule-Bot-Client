@@ -44,15 +44,40 @@ jobs:
           default_branch=$(gh repo view "$REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')
           default_sha=$(gh api "repos/$REPOSITORY/commits/$default_branch" --jq '.sha')
           base_runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$default_sha&per_page=100")
+          declare -A workflow_files=(
+            [CI]=ci.yml
+            [Security]=security.yml
+            ['OpenWrt Packages']=openwrt-packages.yml
+          )
           for workflow in CI Security 'OpenWrt Packages'; do
-            if ! jq -e \
+            run=$(jq -c \
               --arg workflow "$workflow" \
               --arg sha "$default_sha" \
               '[.workflow_runs[] | select(.name == $workflow and .head_sha == $sha)] |
-               sort_by(.id) | last |
-               .status == "completed" and .conclusion == "success"' \
-              <<<"$base_runs" >/dev/null; then
-              echo "Default branch $default_sha is not yet green in $workflow"
+               sort_by(.id) | last // null' \
+              <<<"$base_runs")
+            if test "$run" = null; then
+              gh workflow run "${workflow_files[$workflow]}" --repo "$REPOSITORY" --ref "$default_branch"
+              echo "Dispatched missing $workflow gate for default branch $default_sha"
+              exit 0
+            fi
+
+            status=$(jq -r '.status' <<<"$run")
+            conclusion=$(jq -r '.conclusion // ""' <<<"$run")
+            if test "$status" != completed; then
+              echo "Default branch $default_sha is still running $workflow"
+              exit 0
+            fi
+            if test "$conclusion" != success; then
+              run_id=$(jq -r '.id' <<<"$run")
+              run_attempt=$(jq -r '.run_attempt // 1' <<<"$run")
+              if [[ "$conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
+                 test "$run_attempt" -lt 3; then
+                gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/rerun-failed-jobs"
+                echo "Re-running failed $workflow gate $run_id for default branch $default_sha (attempt $((run_attempt + 1))/3)"
+                exit 0
+              fi
+              echo "Default branch $default_sha is not green in $workflow after $run_attempt attempt(s): $conclusion"
               exit 0
             fi
           done
@@ -92,16 +117,38 @@ jobs:
             runs=$(gh api "repos/$REPOSITORY/actions/runs?event=pull_request&head_sha=$head_sha&per_page=100")
             gates_ok=true
             for workflow in CI Security 'OpenWrt Packages'; do
-              if ! jq -e \
+              run=$(jq -c \
                 --arg workflow "$workflow" \
                 --arg sha "$head_sha" \
                 --argjson pull_number "$pull_number" \
                 '[.workflow_runs[] |
                   select(.name == $workflow and .head_sha == $sha) |
                   select(any(.pull_requests[]?; .number == $pull_number))] |
-                 sort_by(.id) | last |
-                 .status == "completed" and .conclusion == "success"' \
-                <<<"$runs" >/dev/null; then
+                 sort_by(.id) | last // null' \
+                <<<"$runs")
+              if test "$run" = null; then
+                echo "PR #$pull_number has no $workflow gate for $head_sha"
+                gates_ok=false
+                break
+              fi
+
+              status=$(jq -r '.status' <<<"$run")
+              conclusion=$(jq -r '.conclusion // ""' <<<"$run")
+              if test "$status" != completed; then
+                echo "PR #$pull_number is still running $workflow for $head_sha"
+                gates_ok=false
+                break
+              fi
+              if test "$conclusion" != success; then
+                run_id=$(jq -r '.id' <<<"$run")
+                run_attempt=$(jq -r '.run_attempt // 1' <<<"$run")
+                if [[ "$conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
+                   test "$run_attempt" -lt 3; then
+                  gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/rerun-failed-jobs"
+                  echo "Re-running failed $workflow gate $run_id for PR #$pull_number (attempt $((run_attempt + 1))/3)"
+                  exit 0
+                fi
+                echo "PR #$pull_number is not green in $workflow after $run_attempt attempt(s): $conclusion"
                 gates_ok=false
                 break
               fi
