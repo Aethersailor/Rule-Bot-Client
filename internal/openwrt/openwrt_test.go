@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -778,6 +781,110 @@ config rule_bot 'rule_bot'
 	}
 	if stored.RuleBot.Endpoint != "https://private-rule-bot.example/api/private/hidden-path" || stored.RuleBot.ProxyURL != "http://proxy-user:proxy-password@127.0.0.1:7890" {
 		t.Fatalf("editor round trip changed sensitive settings: endpoint=%q proxy=%q", stored.RuleBot.Endpoint, stored.RuleBot.ProxyURL)
+	}
+}
+
+func TestUpdateVersionComparison(t *testing.T) {
+	development, err := parseUpdateVersion("0.1.0_git32650000000", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stable, err := parseUpdateVersion("v0.2.1", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compareUpdateVersions(development, stable) >= 0 {
+		t.Fatal("development package was not older than the stable Release")
+	}
+	if _, err := parseUpdateVersion("v0.2.1-beta.1", true); err == nil {
+		t.Fatal("stable update parser accepted a prerelease")
+	}
+}
+
+func TestUpdateManifestSelectsHighestPriorityArchitecture(t *testing.T) {
+	manifest := []byte("format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" +
+		"ipk\tmips_24kc\tluci-app-rule-bot-client_0.2.1-r1_mips_24kc.ipk\t" + strings.Repeat("a", 64) + "\t5000000\thttps://downloads.openwrt.org/releases/24.10.4/targets/ath79/generic/sdk.tar.zst\n" +
+		"ipk\tmipsel_24kc\tluci-app-rule-bot-client_0.2.1-r1_mipsel_24kc.ipk\t" + strings.Repeat("b", 64) + "\t5100000\thttps://downloads.openwrt.org/releases/24.10.4/targets/ramips/mt7621/sdk.tar.zst\n")
+	packages, err := parseUpdateManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := selectUpdatePackage(packages, updateEnvironment{
+		Manager: "opkg", Format: "ipk", Architectures: map[string]int{"mips_24kc": 10, "mipsel_24kc": 20},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Architecture != "mipsel_24kc" {
+		t.Fatalf("selected architecture = %q", selected.Architecture)
+	}
+}
+
+func TestUpdateManifestRejectsDuplicateOrUnsafeEntries(t *testing.T) {
+	entry := "apk\tx86_64\tluci-app-rule-bot-client-0.2.1-r1_x86_64.apk\t" + strings.Repeat("c", 64) + "\t5000000\thttps://downloads.openwrt.org/releases/25.12.0/targets/x86/64/sdk.tar.zst\n"
+	if _, err := parseUpdateManifest([]byte("format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" + entry + entry)); err == nil {
+		t.Fatal("duplicate update package identity was accepted")
+	}
+	unsafe := strings.Replace(entry, "luci-app-rule-bot-client-0.2.1-r1_x86_64.apk", "../candidate.apk", 1)
+	if _, err := parseUpdateManifest([]byte("format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" + unsafe)); err == nil {
+		t.Fatal("unsafe update package name was accepted")
+	}
+}
+
+func TestReleaseManifestRedirectRequiresStableRepositoryPath(t *testing.T) {
+	tag, err := releaseTagFromManifestURL("https://github.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv", false)
+	if err != nil || tag != "v0.2.1" {
+		t.Fatalf("tag = %q, error = %v", tag, err)
+	}
+	for _, value := range []string{
+		"https://example.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv",
+		"https://github.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1-beta/openwrt-manifest.tsv",
+	} {
+		if _, err := releaseTagFromManifestURL(value, false); err == nil {
+			t.Fatalf("unsafe Release redirect was accepted: %s", value)
+		}
+	}
+}
+
+func TestLatestReleaseRedirectFetchesExactManifest(t *testing.T) {
+	manifest := "format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" +
+		"apk\tx86_64\tluci-app-rule-bot-client-0.2.1-r1_x86_64.apk\t" + strings.Repeat("d", 64) + "\t5000000\thttps://downloads.openwrt.org/releases/25.12.0/targets/x86/64/sdk.tar.zst\n"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/latest/openwrt-manifest.tsv":
+			writer.Header().Set("Location", serverURL(request)+"/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv")
+			writer.WriteHeader(http.StatusFound)
+		case "/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv":
+			_, _ = io.WriteString(writer, manifest)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+	backend := Backend{Testing: true, UpdateManifestURL: server.URL + "/latest/openwrt-manifest.tsv"}
+	tag, target, err := backend.resolveLatestManifest(context.Background())
+	if err != nil || tag != "v0.2.1" {
+		t.Fatalf("tag = %q, target = %q, error = %v", tag, target, err)
+	}
+	packages, err := backend.fetchUpdateManifest(context.Background(), target)
+	if err != nil || len(packages) != 1 || packages[0].Architecture != "x86_64" {
+		t.Fatalf("packages = %#v, error = %v", packages, err)
+	}
+}
+
+func serverURL(request *http.Request) string {
+	return "http://" + request.Host
+}
+
+func TestAutomaticUpdateSettingRoundTrips(t *testing.T) {
+	settings := DefaultSettings()
+	settings.AutoUpdate = true
+	config, err := ParseUCI(RenderUCI(settingsUCI(settings)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Sections[0].Options["auto_update"] != "1" {
+		t.Fatal("automatic update setting was not persisted")
 	}
 }
 

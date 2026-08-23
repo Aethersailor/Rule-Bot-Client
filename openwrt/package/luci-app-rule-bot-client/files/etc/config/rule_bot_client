@@ -6,6 +6,7 @@ config main 'main'
 	option flush_interval '5s'
 	option include_failed_connections '1'
 	option include_single_label_hosts '0'
+	option auto_update '0'
 	option storage_mode 'persistent'
 
 config source 'openclash'

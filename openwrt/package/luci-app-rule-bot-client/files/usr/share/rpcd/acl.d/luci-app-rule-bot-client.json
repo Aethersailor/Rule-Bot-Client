@@ -3,12 +3,12 @@
 		"description": "Grant access to fixed Rule-Bot Client management actions",
 		"read": {
 			"ubus": {
-				"luci.rule_bot_client": [ "config", "status", "probe", "domains", "export", "logs", "upgrade" ]
+				"luci.rule_bot_client": [ "config", "status", "probe", "domains", "export", "logs", "upgrade", "update_status" ]
 			}
 		},
 		"write": {
 			"ubus": {
-				"luci.rule_bot_client": [ "config_edit", "save", "clear", "backup", "restore", "service" ]
+				"luci.rule_bot_client": [ "config_edit", "save", "clear", "backup", "restore", "service", "update_check", "update_config", "update_start" ]
 			}
 		}
 	}

@@ -127,7 +127,9 @@ jobs:
             test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+            prerelease=()
+            case "$GITHUB_REF_NAME" in *-*) prerelease+=(--prerelease) ;; esac
+            gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME" "${prerelease[@]}"
           fi
 
   image:

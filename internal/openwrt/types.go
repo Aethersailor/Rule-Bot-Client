@@ -26,6 +26,7 @@ type Settings struct {
 	FlushInterval            string   `json:"flush_interval"`
 	IncludeFailedConnections bool     `json:"include_failed_connections"`
 	IncludeSingleLabelHosts  bool     `json:"include_single_label_hosts"`
+	AutoUpdate               bool     `json:"auto_update"`
 	Storage                  Storage  `json:"storage"`
 	Sources                  []Source `json:"sources"`
 	RuleBot                  RuleBot  `json:"rule_bot"`
@@ -111,6 +112,7 @@ func DefaultSettings() Settings {
 		FlushInterval:            defaultFlush,
 		IncludeFailedConnections: true,
 		IncludeSingleLabelHosts:  false,
+		AutoUpdate:               false,
 		Storage:                  Storage{Mode: StoragePersistent},
 		Sources: []Source{
 			{ID: SourceOpenClash, Type: SourceOpenClash, Enabled: true, Name: "OpenClash"},

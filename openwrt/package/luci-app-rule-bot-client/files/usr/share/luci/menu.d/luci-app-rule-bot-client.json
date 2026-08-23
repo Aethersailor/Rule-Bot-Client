@@ -30,6 +30,11 @@
 		"order": 50,
 		"action": { "type": "view", "path": "rule_bot_client/backup" }
 	},
+	"admin/services/rule_bot_client/update": {
+		"title": "Software update",
+		"order": 55,
+		"action": { "type": "view", "path": "rule_bot_client/update" }
+	},
 	"admin/services/rule_bot_client/diagnostics": {
 		"title": "Logs and diagnostics",
 		"order": 60,

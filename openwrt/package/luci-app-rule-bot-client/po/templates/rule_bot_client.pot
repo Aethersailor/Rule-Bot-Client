@@ -29,8 +29,16 @@ msgstr ""
 msgid "An offline controller may be saved; Rule-Bot Client will reconnect independently."
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:67
+msgid "Architecture"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:203
 msgid "Automatic adapters"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:84
+msgid "Automatic updates"
 msgstr ""
 
 #: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35
@@ -53,8 +61,16 @@ msgstr ""
 msgid "CA already configured; leave empty to preserve"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/sources.js:116 files/www/luci-static/resources/view/rule_bot_client/sources.js:141 files/www/luci-static/resources/view/rule_bot_client/sources.js:81
+#: files/www/luci-static/resources/view/rule_bot_client/sources.js:116 files/www/luci-static/resources/view/rule_bot_client/sources.js:141 files/www/luci-static/resources/view/rule_bot_client/sources.js:81 files/www/luci-static/resources/view/rule_bot_client/update.js:52
 msgid "Cancel"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:38
+msgid "Check for updates"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:12
+msgid "Checking"
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/backup.js:25
@@ -101,6 +117,10 @@ msgstr ""
 msgid "Complete endpoint"
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:14
+msgid "Completed"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/overview.js:17 files/www/luci-static/resources/view/rule_bot_client/sources.js:39
 msgid "Connected"
 msgstr ""
@@ -123,6 +143,10 @@ msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:114
 msgid "Credentials are stored with restricted permissions and are not returned by status or read-only RPC calls."
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:64
+msgid "Current version"
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:136 files/www/luci-static/resources/view/rule_bot_client/sources.js:75
@@ -165,6 +189,10 @@ msgstr ""
 msgid "Download"
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:13
+msgid "Downloading"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:169 files/www/luci-static/resources/view/rule_bot_client/sources.js:68
 msgid "Edit"
 msgstr ""
@@ -197,6 +225,10 @@ msgstr ""
 msgid "External storage is never replaced by overlay storage."
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:15
+msgid "Failed"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/collection.js:65
 msgid "Flush interval"
 msgstr ""
@@ -209,12 +241,28 @@ msgstr ""
 msgid "incomplete"
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:47 files/www/luci-static/resources/view/rule_bot_client/update.js:49 files/www/luci-static/resources/view/rule_bot_client/update.js:57
+msgid "Install update"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:13
+msgid "Installing"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Instance"
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:69
+msgid "Last checked"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "Last event"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:65
+msgid "Latest version"
 msgstr ""
 
 #: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/sources.js:201
@@ -265,6 +313,10 @@ msgstr ""
 msgid "No secret configured"
 msgstr ""
 
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:12 files/www/luci-static/resources/view/rule_bot_client/update.js:65 files/www/luci-static/resources/view/rule_bot_client/update.js:69
+msgid "Not checked"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:202
 msgid "OpenClash, Nikki, and multiple manual controllers may be enabled in any combination."
 msgstr ""
@@ -273,7 +325,7 @@ msgstr ""
 msgid "Operation completed"
 msgstr ""
 
-#: files/www/luci-static/resources/rule_bot_client/api.js:24 files/www/luci-static/resources/rule_bot_client/api.js:34
+#: files/www/luci-static/resources/rule_bot_client/api.js:28 files/www/luci-static/resources/rule_bot_client/api.js:38
 msgid "Operation failed"
 msgstr ""
 
@@ -295,6 +347,14 @@ msgstr ""
 
 #: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/overview.js:78
 msgid "Overview"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:66
+msgid "Package manager"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:68
+msgid "Package size"
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:57
@@ -333,7 +393,7 @@ msgstr ""
 msgid "Recent service logs"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:19
+#: files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:19 files/www/luci-static/resources/view/rule_bot_client/update.js:88
 msgid "Refresh"
 msgstr ""
 
@@ -357,11 +417,19 @@ msgstr ""
 msgid "Restore this Rule-Bot Client backup and reload the service?"
 msgstr ""
 
-#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:61 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:78 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:201
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:14
+msgid "Rolled back"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:14
+msgid "Rolling back"
+msgstr ""
+
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:61 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:78 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:201 files/www/luci-static/resources/view/rule_bot_client/update.js:81
 msgid "Rule-Bot Client"
 msgstr ""
 
-#: files/www/luci-static/resources/rule_bot_client/api.js:25
+#: files/www/luci-static/resources/rule_bot_client/api.js:29
 msgid "Rule-Bot Client backend error"
 msgstr ""
 
@@ -429,6 +497,10 @@ msgstr ""
 msgid "Skip certificate verification"
 msgstr ""
 
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/update.js:81
+msgid "Software update"
+msgstr ""
+
 #: files/www/luci-static/resources/view/rule_bot_client/overview.js:32
 msgid "State"
 msgstr ""
@@ -449,7 +521,7 @@ msgstr ""
 msgid "sysupgrade keep.d"
 msgstr ""
 
-#: files/www/luci-static/resources/rule_bot_client/api.js:38
+#: files/www/luci-static/resources/rule_bot_client/api.js:42 files/www/luci-static/resources/view/rule_bot_client/update.js:78
 msgid "Technical details"
 msgstr ""
 
@@ -463,6 +535,10 @@ msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:168 files/www/luci-static/resources/view/rule_bot_client/sources.js:184 files/www/luci-static/resources/view/rule_bot_client/sources.js:36 files/www/luci-static/resources/view/rule_bot_client/sources.js:38 files/www/luci-static/resources/view/rule_bot_client/sources.js:44
 msgid "Test connection"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:50
+msgid "The service may restart during installation. Configuration and collected data are preserved."
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/sources.js:204
@@ -485,8 +561,28 @@ msgstr ""
 msgid "Turning this off saves the setting and stops the service. Turning it on validates the configuration and starts the service; the choice persists across reboot."
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/sources.js:194
+#: files/www/luci-static/resources/view/rule_bot_client/sources.js:194 files/www/luci-static/resources/view/rule_bot_client/update.js:64 files/www/luci-static/resources/view/rule_bot_client/update.js:66 files/www/luci-static/resources/view/rule_bot_client/update.js:67 files/www/luci-static/resources/view/rule_bot_client/update.js:68
 msgid "Unavailable"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:17
+msgid "Unknown"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:13
+msgid "Up to date"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:12
+msgid "Update available"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:63
+msgid "Update status"
+msgstr ""
+
+#: files/www/luci-static/resources/view/rule_bot_client/update.js:82
+msgid "Updates are checked against the latest stable GitHub Release. No OpenWrt package feed is used."
 msgstr ""
 
 #: files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:17

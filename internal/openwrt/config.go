@@ -45,6 +45,7 @@ func LoadSettings(root string) (Settings, error) {
 		settings.FlushInterval = stringOption(main, "flush_interval", defaultFlush)
 		settings.IncludeFailedConnections = boolOption(main, "include_failed_connections", true)
 		settings.IncludeSingleLabelHosts = boolOption(main, "include_single_label_hosts", false)
+		settings.AutoUpdate = boolOption(main, "auto_update", false)
 		settings.Storage.Mode = stringOption(main, "storage_mode", StoragePersistent)
 		settings.Storage.ExternalPath = strings.TrimSpace(main.Options["external_path"])
 	}
@@ -112,6 +113,7 @@ func settingsUCI(settings Settings) UCIConfig {
 			"flush_interval":             settings.FlushInterval,
 			"include_failed_connections": boolString(settings.IncludeFailedConnections),
 			"include_single_label_hosts": boolString(settings.IncludeSingleLabelHosts),
+			"auto_update":                boolString(settings.AutoUpdate),
 			"storage_mode":               settings.Storage.Mode,
 		}, Lists: map[string][]string{},
 	}}}

@@ -387,3 +387,75 @@ msgstr "工作模式"
 
 msgid "sysupgrade keep.d"
 msgstr "sysupgrade 保留清单（keep.d）"
+
+msgid "Architecture"
+msgstr "架构"
+
+msgid "Automatic updates"
+msgstr "自动更新"
+
+msgid "Check for updates"
+msgstr "检查更新"
+
+msgid "Checking"
+msgstr "正在检查"
+
+msgid "Completed"
+msgstr "已完成"
+
+msgid "Current version"
+msgstr "当前版本"
+
+msgid "Downloading"
+msgstr "正在下载"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "Install update"
+msgstr "安装更新"
+
+msgid "Installing"
+msgstr "正在安装"
+
+msgid "Last checked"
+msgstr "最近检查时间"
+
+msgid "Latest version"
+msgstr "最新版本"
+
+msgid "Not checked"
+msgstr "尚未检查"
+
+msgid "Package manager"
+msgstr "软件包管理器"
+
+msgid "Package size"
+msgstr "软件包大小"
+
+msgid "Rolled back"
+msgstr "已回滚"
+
+msgid "Rolling back"
+msgstr "正在回滚"
+
+msgid "Software update"
+msgstr "软件更新"
+
+msgid "The service may restart during installation. Configuration and collected data are preserved."
+msgstr "安装期间服务可能重启。配置和已收集的数据会保留。"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Up to date"
+msgstr "已是最新版本"
+
+msgid "Update available"
+msgstr "发现新版本"
+
+msgid "Update status"
+msgstr "更新状态"
+
+msgid "Updates are checked against the latest stable GitHub Release. No OpenWrt package feed is used."
+msgstr "更新检查以 GitHub 最新稳定版 Release 为准，不使用 OpenWrt 软件源。"

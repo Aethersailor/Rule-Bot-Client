@@ -8,8 +8,8 @@ const helper = '/usr/libexec/rule-bot-client-openwrt';
 const request_dir = '/var/run/rule-bot-client/rpc';
 const allowed_actions = {
 	config: true, config_edit: true, status: true, probe: true, domains: true, export: true,
-	logs: true, backup: true, upgrade: true, save: true, clear: true,
-	restore: true, service: true
+	logs: true, backup: true, upgrade: true, update_status: true, update_check: true,
+	update_config: true, update_start: true, save: true, clear: true, restore: true, service: true
 };
 
 function invoke(action, args) {
@@ -62,6 +62,13 @@ const methods = {
 	logs: { call: function() { return invoke('logs', {}); } },
 	backup: { call: function() { return invoke('backup', {}); } },
 	upgrade: { call: function() { return invoke('upgrade', {}); } },
+	update_status: { call: function() { return invoke('update_status', {}); } },
+	update_check: { call: function() { return invoke('update_check', {}); } },
+	update_config: {
+		args: { enabled: false },
+		call: function(request) { return invoke('update_config', { enabled: request.args.enabled }); }
+	},
+	update_start: { call: function() { return invoke('update_start', {}); } },
 	save: {
 		args: { payload: {} },
 		call: function(request) { return invoke('save', request.args.payload); }

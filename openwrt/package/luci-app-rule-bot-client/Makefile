@@ -71,19 +71,32 @@ endef
 define Package/luci-app-rule-bot-client/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
+/bin/mkdir -p /etc/crontabs
+/bin/touch /etc/crontabs/root
+cron_line='17 4 * * * /usr/libexec/rule-bot-client-openwrt update_auto >/dev/null 2>&1'
+/bin/grep -Fqx "$${cron_line}" /etc/crontabs/root || /usr/bin/printf '%s\n' "$${cron_line}" >> /etc/crontabs/root
 /usr/libexec/rule-bot-client-openwrt initialize >/dev/null 2>&1 || exit 1
 /etc/init.d/rule-bot-client enable >/dev/null 2>&1 || true
 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 /etc/init.d/uhttpd reload >/dev/null 2>&1 || true
 /etc/init.d/rule-bot-client restart >/dev/null 2>&1 || true
+/etc/init.d/cron restart >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/luci-app-rule-bot-client/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
+cron_line='17 4 * * * /usr/libexec/rule-bot-client-openwrt update_auto >/dev/null 2>&1'
+if [ -f /etc/crontabs/root ]; then
+	temporary=$$(mktemp /tmp/rule-bot-client-cron.XXXXXX) || exit 1
+	/bin/grep -Fvx "$${cron_line}" /etc/crontabs/root > "$${temporary}" || true
+	/bin/cat "$${temporary}" > /etc/crontabs/root
+	/bin/rm -f "$${temporary}"
+fi
 /etc/init.d/rule-bot-client stop >/dev/null 2>&1 || true
 /etc/init.d/rule-bot-client disable >/dev/null 2>&1 || true
+/etc/init.d/cron restart >/dev/null 2>&1 || true
 exit 0
 endef
 

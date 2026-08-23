@@ -49,6 +49,7 @@ grep -F 'procd_add_reload_trigger rule_bot_client openclash nikki' "$root/etc/in
 grep -F '/var/run/rule-bot-client/config.json' "$root/etc/init.d/rule-bot-client"
 grep -F 'procd_set_param user nobody' "$root/etc/init.d/rule-bot-client"
 grep -F 'procd_set_param group nogroup' "$root/etc/init.d/rule-bot-client"
+grep -F "update_auto >/dev/null 2>&1" openwrt/package/luci-app-rule-bot-client/Makefile
 grep -F "return { 'luci.rule_bot_client': methods };" "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const allowed_actions = {' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const process = popen(' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
@@ -63,6 +64,9 @@ if grep -F "invoke('domains', request.args)" "$root/usr/share/rpcd/ucode/luci.ru
   echo 'rpcd ucode must not forward LuCI session metadata to the strict domains backend' >&2
   exit 1
 fi
+grep -F 'api.updateCheck()' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
+grep -F 'api.updateConfig(automatic.checked)' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
+grep -F 'api.updateStart()' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
 
 for file in "$root"/usr/share/rpcd/acl.d/*.json "$root"/usr/share/luci/menu.d/*.json; do
   jq -e . "$file" >/dev/null
@@ -71,7 +75,9 @@ done
 acl="$root/usr/share/rpcd/acl.d/luci-app-rule-bot-client.json"
 jq -e '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index("config_edit") | not' "$acl" >/dev/null
 jq -e '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index("config_edit") != null' "$acl" >/dev/null
-for method in config_edit save clear backup restore service; do
+jq -e '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index("update_status") != null' "$acl" >/dev/null
+jq -e '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index("update_status") | not' "$acl" >/dev/null
+for method in config_edit save clear backup restore service update_check update_config update_start; do
   jq -e --arg method "$method" '.["luci-app-rule-bot-client"].read.ubus["luci.rule_bot_client"] | index($method) | not' "$acl" >/dev/null
   jq -e --arg method "$method" '.["luci-app-rule-bot-client"].write.ubus["luci.rule_bot_client"] | index($method) != null' "$acl" >/dev/null
 done
@@ -93,6 +99,7 @@ const expectedMenu = {
   'admin/services/rule_bot_client/collection': 'Collection and Rule-Bot',
   'admin/services/rule_bot_client/results': 'Local results',
   'admin/services/rule_bot_client/backup': 'Backup and restore',
+  'admin/services/rule_bot_client/update': 'Software update',
   'admin/services/rule_bot_client/diagnostics': 'Logs and diagnostics'
 };
 for (const [route, title] of Object.entries(expectedMenu)) {
@@ -131,7 +138,7 @@ const Module = factory(rpc, ui, baseclass, { env: { lang: 'en' } }, element);
 if (typeof Module !== 'function')
   throw new Error('rule_bot_client.api must yield a LuCI constructor');
 const api = new Module();
-for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'logs', 'backup', 'upgrade', 'save', 'clear', 'restore', 'service' ]) {
+for (const method of [ 'config', 'configEdit', 'status', 'probe', 'domains', 'logs', 'backup', 'upgrade', 'updateStatus', 'updateCheck', 'updateConfig', 'updateStart', 'save', 'clear', 'restore', 'service' ]) {
   if (typeof api[method] !== 'function')
     throw new Error(`rule_bot_client.api is missing method ${method}`);
 }

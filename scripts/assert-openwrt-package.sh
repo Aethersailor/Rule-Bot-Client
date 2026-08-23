@@ -27,6 +27,7 @@ www/luci-static/resources/view/rule_bot_client/sources.js
 www/luci-static/resources/view/rule_bot_client/collection.js
 www/luci-static/resources/view/rule_bot_client/results.js
 www/luci-static/resources/view/rule_bot_client/backup.js
+www/luci-static/resources/view/rule_bot_client/update.js
 www/luci-static/resources/view/rule_bot_client/diagnostics.js'
 required_dependencies='ca-bundle
 rpcd

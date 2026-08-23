@@ -19,8 +19,9 @@ import (
 )
 
 type Backend struct {
-	Root    string
-	Testing bool
+	Root              string
+	Testing           bool
+	UpdateManifestURL string
 }
 
 type fileSnapshot struct {
@@ -106,6 +107,24 @@ func (b Backend) Dispatch(ctx context.Context, action string, payload []byte) (a
 		return b.restore(ctx, request.Archive)
 	case "upgrade":
 		return b.upgradeInfo()
+	case "update_status":
+		return b.updateStatus()
+	case "update_check":
+		return b.checkUpdate(ctx)
+	case "update_config":
+		var request struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, err
+		}
+		return b.setAutomaticUpdates(request.Enabled)
+	case "update_start":
+		return b.startUpdateWorker()
+	case "update_worker":
+		return nil, b.runUpdate(ctx)
+	case "update_auto":
+		return b.autoUpdate(ctx)
 	default:
 		return nil, errors.New("unsupported fixed action")
 	}
