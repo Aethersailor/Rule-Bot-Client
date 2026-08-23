@@ -1,5 +1,7 @@
 # Rule-Bot Client design contract
 
+> 本文面向审阅实现、打包和安全边界的开发者与维护者，记录不可破坏的设计约定。安装和使用 Rule-Bot Client 时，请从[项目 README](README.md)和[用户 Wiki](https://github.com/Aethersailor/Rule-Bot-Client/wiki)开始；普通用户不需要按本文执行操作。
+
 ## Scope
 
 Rule-Bot Client has one data path:

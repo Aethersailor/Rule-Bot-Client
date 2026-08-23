@@ -16,9 +16,15 @@ Rule-Bot 可能返回已存在、GeoSite 已覆盖、无效或策略拒绝。只
 
 一个客户端可以连接多个 Mihomo 实例。Rule-Bot 投递默认关闭，首次启用默认不发送已有历史清单。
 
-⚠️ Rule-Bot Client 会观察设备或网络访问过的域名。共享网络使用前，应确认有权收集这些数据。成功添加的域名会公开进入 GitHub 历史。
+⚠️ Rule-Bot Client 会观察设备或网络访问过的域名。共享网络使用前，应确认有权收集这些数据。成功添加的域名会写入服务方配置的 GitHub 仓库及提交历史；使用项目公共 Rule-Bot 时，这些内容会公开。
 
-项目已通过 Go 测试、race 检查、容器烟测、多架构构建、OpenWrt 软件包检查，以及 Debian 与 OpenWrt 实例验证。
+正式发布流程包含 Go 测试、race 检查、容器烟测、多架构构建和 OpenWrt 软件包检查。当前版本、验证结果和已知限制以 GitHub Release 与 Actions 为准。
 
 GitHub：
 https://github.com/Aethersailor/Rule-Bot-Client
+
+用户文档：
+https://github.com/Aethersailor/Rule-Bot-Client/wiki
+
+公共 Rule-Bot 接入流程：
+https://github.com/Aethersailor/Rule-Bot-Client/wiki/接入公共-Rule-Bot

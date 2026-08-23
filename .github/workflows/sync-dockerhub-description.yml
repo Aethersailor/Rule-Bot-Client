@@ -1,0 +1,53 @@
+name: Sync Docker Hub Description
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/DOCKERHUB_DESCRIPTION.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-description-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Publish visitor documentation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Update Docker Hub repository description
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          SHORT_DESCRIPTION: 本地优先的 Mihomo MATCH 域名收集器，可选发送至 Rule-Bot
+        shell: bash
+        run: |
+          set -euo pipefail
+          login_payload="$(jq -n \
+            --arg username "$DOCKERHUB_USERNAME" \
+            --arg password "$DOCKERHUB_TOKEN" \
+            '{username: $username, password: $password}')"
+          jwt="$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$login_payload" \
+            https://hub.docker.com/v2/users/login/ | jq -er '.token // .access_token')"
+          update_payload="$(jq -Rs \
+            --arg description "$SHORT_DESCRIPTION" \
+            '{description: $description, full_description: .}' \
+            .github/DOCKERHUB_DESCRIPTION.md)"
+          response="$(curl --fail --silent --show-error \
+            -X PATCH \
+            -H "Authorization: JWT $jwt" \
+            -H 'Content-Type: application/json' \
+            -d "$update_payload" \
+            https://hub.docker.com/v2/repositories/aethersailor/rule-bot-client/)"
+          test "$(jq -r '.description' <<<"$response")" = "$SHORT_DESCRIPTION"
+          test "$(jq -r '.full_description' <<<"$response")" = "$(cat .github/DOCKERHUB_DESCRIPTION.md)"

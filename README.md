@@ -57,6 +57,21 @@ Rule-Bot Client 不是代理客户端，也不会修改 Mihomo 配置。它不�
 
 Rule-Bot 发送功能默认关闭。只使用本地收集时，域名不会发送给 Rule-Bot。
 
+<a id="与其他项目的关系"></a>
+## 🔗 与其他项目的关系
+
+Rule-Bot Client 可以独立完成本地域名收集。其余项目只在对应场景中使用：
+
+| 项目 | 作用 | 是否必需 |
+| --- | --- | --- |
+| [Rule-Bot](https://github.com/Aethersailor/Rule-Bot) | 检查候选域名，并按服务端策略写入目标 GitHub 规则仓库 | 可选；本地收集不需要 |
+| [Custom_OpenClash_Rules](https://github.com/Aethersailor/Custom_OpenClash_Rules) | 项目公共 Rule-Bot 的目标规则仓库 | 仅使用公共提交服务时相关 |
+| [SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | 可选的订阅转换后端，可使用 Custom_OpenClash_Rules 模板生成配置 | 与域名收集和发送没有直接依赖 |
+
+公共服务中的数据流为：
+
+`Mihomo 的 MATCH 连接` → `Rule-Bot Client 本地收集` → `用户主动启用发送` → `Rule-Bot 检查` → `Custom_OpenClash_Rules`
+
 <a id="安装前需要确认"></a>
 ## ✅ 安装前需要确认
 
@@ -145,7 +160,7 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 - Mihomo 的实时日志没有历史队列。客户端断线期间已经结束的短连接可能无法补回，因此本项目不保证审计级的零丢失。
 - 使用公网 Rule-Bot 提交地址时必须使用 HTTPS。不要把访问令牌、Mihomo 控制接口密钥或完整配置发布到 Issue、聊天记录或公开仓库。
 
-启用 Rule-Bot 前，请阅读完整的 [客户端隐私说明](PRIVACY.md) 和对应服务方的隐私说明。
+启用 Rule-Bot 前，请阅读完整的 [客户端隐私说明](PRIVACY.md) 和对应服务方的隐私说明。使用项目公共服务时，同时阅读 [Rule-Bot 隐私说明](https://github.com/Aethersailor/Rule-Bot/blob/master/PRIVACY.md)。
 
 <a id="可选发送给-rule-bot"></a>
 ## 🤖 可选：发送给 Rule-Bot
@@ -153,9 +168,11 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 本地收集正常后，可以填写服务方提供的 Rule-Bot 提交地址和访问令牌（Token）：
 
 - 私用地址由 Rule-Bot 部署者提供。
-- 社区用户需要私聊对应的 Rule-Bot，进入「Rule-Bot Client 接入」，阅读并同意隐私说明，通过群成员验证后领取个人访问令牌。
+- 社区用户可以按照 Wiki 的[接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot)流程，私聊 [@asailor_rulebot](https://t.me/asailor_rulebot)，阅读并同意隐私说明，通过群成员验证后领取个人访问令牌。
 - 群聊只用于社区资格验证。客户端不会读取群消息，也不会把处理结果发送到群内。
 - 首次启用且没有发送进度文件时，默认只发送之后新增的域名，不发送本地清单中的历史内容。已有发送进度文件时，重新启用会从原进度继续。
+
+项目公共 Rule-Bot 会把通过检查的域名写入 [Custom_OpenClash_Rules 的 `rule/Custom_Direct.list`](https://github.com/Aethersailor/Custom_OpenClash_Rules/blob/main/rule/Custom_Direct.list)。自行部署的 Rule-Bot 可以使用其他目标仓库；客户端不会自行选择仓库或规则文件。
 
 具体字段见 Wiki 的[配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E)。
 
@@ -169,6 +186,7 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 | 🐧 [Linux 部署方式](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker) | 根据系统选择 Debian 软件包、Docker Compose 或原生二进制 |
 | 📡 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97) | 安装、首次配置、升级、备份和卸载 |
 | ⚙️ [配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) | Mihomo 控制接口、域名保存方式、Rule-Bot、HTTPS 和代理设置 |
+| 🔗 [接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot) | 申请个人 Token、配置客户端、验证处理结果和管理凭据 |
 | 🩺 [故障排查](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5) | 无法启动、无法连接、没有结果和 Rule-Bot 发送失败 |
 | 🔐 [隐私说明](PRIVACY.md) | 本地保存、发送到外部的数据、出口 IP 和用户控制 |
 | 🛡️ [安全策略](SECURITY.md) | 私密报告安全问题，以及公开反馈前需要移除的信息 |

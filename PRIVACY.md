@@ -44,4 +44,4 @@ Rule-Bot 投递日志不写入原始域名，只记录使用进程启动时随�
 - 定期审查和保护本地输出文件；
 - 在 Rule-Bot 私聊中吊销社区 Token 或撤回隐私同意。
 
-成功添加的域名会公开出现在 Rule-Bot 目标 GitHub 规则仓库及提交历史中。使用社区入口前，请同时阅读服务端提供的隐私说明。
+成功添加的域名会写入 Rule-Bot 服务方配置的目标 GitHub 规则仓库及提交历史。目标仓库公开时，域名也会公开；私有仓库是否公开取决于仓库权限。使用项目公共入口时，目标仓库是公开的 Custom_OpenClash_Rules。启用发送前，请同时阅读 [Rule-Bot 服务端隐私说明](https://github.com/Aethersailor/Rule-Bot/blob/master/PRIVACY.md)。
