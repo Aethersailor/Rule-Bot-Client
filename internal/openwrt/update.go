@@ -214,13 +214,19 @@ func (b Backend) fetchUpdateFile(ctx context.Context, target, destination string
 	if b.Testing {
 		return errors.New("update downloads are unavailable in an offline test root")
 	}
+	var firstError error
 	if _, err := os.Stat("/bin/uclient-fetch"); err == nil {
-		_, err = b.runUpdateCommand(ctx, "/bin/uclient-fetch", "-O", destination, target)
-		return err
+		if _, err = b.runUpdateCommand(ctx, "/bin/uclient-fetch", "-O", destination, target); err == nil {
+			return nil
+		}
+		firstError = err
 	}
 	if _, err := os.Stat("/usr/bin/wget"); err == nil {
 		_, err = b.runUpdateCommand(ctx, "/usr/bin/wget", "-O", destination, target)
 		return err
+	}
+	if firstError != nil {
+		return firstError
 	}
 	return errors.New("neither uclient-fetch nor wget is available")
 }
