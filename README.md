@@ -100,15 +100,20 @@ OpenWrt 软件包可以自动发现本机的 OpenClash 或 Nikki。其他部署�
 | 🐳 已安装 Docker 的 Linux 或 NAS | Docker Compose | 镜像支持 `linux/amd64` 和 `linux/arm64` |
 | 📦 Debian 或 Ubuntu | `.deb` 软件包 | 支持 `amd64`、`arm64` 和 `armhf`，作为系统服务运行 |
 | 🧰 不使用 Docker 的 Linux | 原生二进制 | 提供 AMD64、386、ARM、MIPS、MIPS64、RISC-V 等构建，需要自行管理服务 |
+| 🪟 Windows 10 或 11 | 便携压缩包 | 提供 AMD64 和 ARM64 构建，解压后编辑配置即可运行 |
 | 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 支持 OpenWrt 24.10 和 25.12 的四种常见架构，通过 OpenWrt Web 界面配置 |
 
-当前没有 Windows 或 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 软件包，不要安装通用 Linux 压缩包。
+当前没有 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 软件包，不要安装通用 Linux 压缩包。
 
 ### 推荐：Linux、NAS 或 Docker
 
 Debian 软件包、Docker Compose 和原生二进制的完整步骤见 [Linux 部署方式](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker)。
 
 Linux 版本没有 Web 管理页面，需要编辑 JSON 文本配置文件，并通过日志和输出文件确认状态。
+
+### Windows 便携版
+
+从正式版本页面下载与设备匹配的 Windows 压缩包。解压、复制并编辑示例配置后即可运行，不需要安装程序。完整步骤见 [Windows 便携版](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88)。
 
 ### 只有 OpenWrt 设备时
 
@@ -184,6 +189,7 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 | 文档 | 内容 |
 | --- | --- |
 | 🐧 [Linux 部署方式](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker) | 根据系统选择 Debian 软件包、Docker Compose 或原生二进制 |
+| 🪟 [Windows 便携版](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88) | 下载、配置、运行和自动更新 Windows 便携包 |
 | 📡 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97) | 安装、首次配置、升级、备份和卸载 |
 | ⚙️ [配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) | Mihomo 控制接口、域名保存方式、Rule-Bot、HTTPS 和代理设置 |
 | 🔗 [接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot) | 申请个人 Token、配置客户端、验证处理结果和管理凭据 |

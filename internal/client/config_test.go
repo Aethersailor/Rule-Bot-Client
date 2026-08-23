@@ -36,6 +36,9 @@ func TestLoadConfigDefaultsAndRelativePaths(t *testing.T) {
 	if !cfg.IncludeFailedConnections {
 		t.Fatal("IncludeFailedConnections default is false")
 	}
+	if cfg.AutoUpdate {
+		t.Fatal("AutoUpdate default is true")
+	}
 	if cfg.Instances[0].URL != "http://127.0.0.1:9090" {
 		t.Fatalf("URL = %q", cfg.Instances[0].URL)
 	}

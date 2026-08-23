@@ -51,6 +51,7 @@ type Config struct {
 	FlushInterval            Duration         `json:"flush_interval"`
 	IncludeFailedConnections bool             `json:"include_failed_connections"`
 	IncludeSingleLabelHosts  bool             `json:"include_single_label_hosts"`
+	AutoUpdate               bool             `json:"auto_update,omitempty"`
 	Instances                []InstanceConfig `json:"instances"`
 	RuleBot                  RuleBotConfig    `json:"rule_bot,omitempty"`
 }

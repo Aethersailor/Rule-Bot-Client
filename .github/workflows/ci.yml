@@ -113,6 +113,41 @@ jobs:
           BUILD_DATE: "1970-01-01T00:00:00Z"
         run: sh scripts/build-one.sh
 
+  windows:
+    name: Windows portable smoke test
+    runs-on: windows-2025
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Test Windows source
+        run: go test -count=1 ./...
+
+      - name: Build and run portable executable
+        shell: bash
+        env:
+          TARGET_OS: windows
+          TARGET_ARCH: amd64
+          TARGET_LABEL: windows-amd64
+          OUTPUT: dist/rule-bot-client.exe
+          VERSION: ci
+          COMMIT: ${{ github.sha }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: sh scripts/build-one.sh
+
+      - name: Verify Windows identity and bundled configuration
+        shell: pwsh
+        run: |
+          $identity = & .\dist\rule-bot-client.exe --version
+          if ($identity -notlike "*commit=${{ github.sha }}*target=windows-amd64*") { throw "unexpected identity: $identity" }
+          & .\dist\rule-bot-client.exe --config .\deploy\windows\config.json --check
+
   container:
     name: Container smoke test
     runs-on: ubuntu-24.04

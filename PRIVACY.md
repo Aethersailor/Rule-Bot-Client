@@ -25,9 +25,9 @@ Rule-Bot Client 会观察 Mihomo / Clash 控制器提供的连接日志，因此
 
 使用代理后，入口通常只能看到代理出口 IP，但代理提供方能够观察连接目标与时间。Rule-Bot Client 不承诺匿名性；用户需要自行选择可信代理并保护代理凭据。
 
-## OpenWrt 更新检查
+## 自动更新检查
 
-OpenWrt 用户手工检查更新，或显式启用自动更新后，设备会访问本项目的 GitHub Releases。GitHub 及其下载服务能够看到设备的出口 IP；下载的软件包名称还会反映包管理器和设备架构。更新请求不包含 Mihomo 地址、访问密钥、Rule-Bot Token、域名清单或设备名称。自动更新默认关闭。
+Linux、Windows 或 OpenWrt 执行更新检查时，设备会访问本项目的 GitHub Releases。GitHub 及其下载服务能够看到设备的出口 IP；下载的软件包名称还会反映操作系统、包管理器或设备架构。更新请求不包含 Mihomo 地址、访问密钥、Rule-Bot Token、域名清单或设备名称。Windows 便携版示例和 Debian 软件包会启用自动更新；OpenWrt 自动更新默认关闭，Docker 用户是否启用外部镜像更新工具由部署者决定。
 
 ## 本地日志与状态
 

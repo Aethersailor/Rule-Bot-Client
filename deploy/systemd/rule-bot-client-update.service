@@ -1,0 +1,23 @@
+[Unit]
+Description=Update Rule-Bot Client from the latest stable GitHub Release
+Documentation=https://github.com/Aethersailor/Rule-Bot-Client
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rule-bot-client --config /etc/rule-bot-client/config.json --update-apply
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native

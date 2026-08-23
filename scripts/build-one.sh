@@ -5,6 +5,7 @@ set -eu
 : "${OUTPUT:?OUTPUT is required}"
 
 TARGET_OS=${TARGET_OS:-linux}
+TARGET_LABEL=${TARGET_LABEL:-${TARGET_OS}-${TARGET_ARCH}}
 VERSION=${VERSION:-dev}
 COMMIT=${COMMIT:-$(git rev-parse --short=12 HEAD)}
 BUILD_DATE=${BUILD_DATE:-$(git show -s --format=%cI HEAD)}
@@ -19,7 +20,8 @@ go build -buildvcs=false -trimpath \
   -ldflags="-s -w -buildid= \
     -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildVersion=$VERSION \
     -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildCommit=$COMMIT \
-    -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildDate=$BUILD_DATE" \
+    -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildDate=$BUILD_DATE \
+    -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildTarget=$TARGET_LABEL" \
   -o "$OUTPUT" ./cmd/rule-bot-client
 
 size=$(wc -c < "$OUTPUT")

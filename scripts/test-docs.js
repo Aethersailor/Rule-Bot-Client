@@ -75,6 +75,10 @@ function assertBundledConfig(relativePath) {
 		if (config.rule_bot.send_existing !== false)
 			fail(`${relativePath}: rule_bot.send_existing must remain false by default`);
 	}
+	if (relativePath === 'deploy/windows/config.json' && config.auto_update !== true)
+		fail(`${relativePath}: Windows portable automatic updates must be enabled in its example`);
+	if (relativePath !== 'deploy/windows/config.json' && config.auto_update !== false)
+		fail(`${relativePath}: non-Windows examples must not enable in-process automatic updates`);
 }
 
 function markdownAnalysis(relativePath) {
@@ -227,6 +231,10 @@ function assertReleaseExampleContract() {
 			'scripts/build-release.sh: Linux archives must include linked privacy and security documents');
 	}
 	const releaseWorkflow = read('.github/workflows/release.yml');
+	requireMatch(buildRelease, /build_windows_archive\(\)[\s\S]*deploy\/windows\/config\.json[\s\S]*windows-\$label/,
+		'scripts/build-release.sh: Windows portable archives must use the Windows configuration and target identity');
+	requireMatch(buildRelease, /client-update-manifest\.json/,
+		'scripts/build-release.sh: release builds must publish the client update manifest');
 	requireMatch(releaseWorkflow,
 		/tar -tzf "\$archive"[\s\\]*"\$package\/config\.example\.json"/,
 		'.github/workflows/release.yml: release validation must inspect config.example.json in every Linux archive');
@@ -266,6 +274,8 @@ function assertVisitorDeploymentGuidance() {
 function assertDeploymentContracts() {
 	const packageScript = read('scripts/package-deb.sh');
 	const systemdUnit = read('deploy/systemd/rule-bot-client.service');
+	const updateService = read('deploy/systemd/rule-bot-client-update.service');
+	const updateTimer = read('deploy/systemd/rule-bot-client-update.timer');
 	const dockerfile = read('Dockerfile');
 	const compose = read('compose.yaml');
 
@@ -275,6 +285,12 @@ function assertDeploymentContracts() {
 		'scripts/package-deb.sh: config.json must be owned by root:rule-bot-client');
 	requireMatch(packageScript, /chmod\s+0640\s+\/etc\/rule-bot-client\/config\.json/,
 		'scripts/package-deb.sh: config.json must use mode 0640');
+	requireMatch(packageScript, /systemctl\s+enable\s+--now\s+rule-bot-client-update\.timer/,
+		'scripts/package-deb.sh: Debian package must enable its automatic update timer');
+	requireMatch(updateService, /--update-apply/,
+		'deploy/systemd/rule-bot-client-update.service: update service must invoke the built-in updater');
+	requireMatch(updateTimer, /^OnCalendar=daily$/m,
+		'deploy/systemd/rule-bot-client-update.timer: automatic updates must run daily');
 	requireMatch(systemdUnit, /^User=rule-bot-client$/m,
 		'deploy/systemd/rule-bot-client.service: service must run as rule-bot-client');
 	requireMatch(systemdUnit, /^Group=rule-bot-client$/m,
@@ -296,7 +312,8 @@ function assertDeploymentContracts() {
 const bundledConfigs = [
 	'config.example.json',
 	'deploy/docker/config.json',
-	'deploy/systemd/config.json'
+	'deploy/systemd/config.json',
+	'deploy/windows/config.json'
 ];
 bundledConfigs.forEach(assertBundledConfig);
 

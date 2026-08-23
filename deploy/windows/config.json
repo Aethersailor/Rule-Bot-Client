@@ -1,25 +1,23 @@
 {
   "version": 1,
-  "output": "/var/lib/rule-bot-client/domains.txt",
+  "output": "data/domains.txt",
+  "status_file": "data/status.json",
+  "runtime_cache_dir": "data/cache",
   "domain_mode": "registrable_domain",
   "flush_interval": "5s",
   "include_failed_connections": true,
   "include_single_label_hosts": false,
-  "auto_update": false,
+  "auto_update": true,
   "rule_bot": {
     "enabled": false,
     "endpoint": "https://rule-bot.example.com/api/v1/rule-bot-client/replace-with-your-private-path",
     "token": "replace-with-your-rule-bot-token",
-    "state_file": "/var/lib/rule-bot-client/rulebot-state.json",
-    "send_existing": false,
-    "privacy": {
-      "reduce_to_registrable_domain": true,
-      "exclude_suffixes": []
-    }
+    "state_file": "data/rulebot-state.json",
+    "send_existing": false
   },
   "instances": [
     {
-      "name": "home",
+      "name": "local",
       "url": "http://127.0.0.1:9090",
       "secret": "replace-with-your-mihomo-secret"
     }

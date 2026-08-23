@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for stable Rule-Bot Client updates daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+Unit=rule-bot-client-update.service
+
+[Install]
+WantedBy=timers.target

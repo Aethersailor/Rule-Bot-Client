@@ -1,9 +1,14 @@
 package client
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,7 +16,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -392,6 +399,115 @@ func TestControllerRejectsRedirect(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "302") || targetHit.Load() {
 		t.Fatalf("openLogs() error=%v targetHit=%v", err, targetHit.Load())
+	}
+}
+
+func TestClientUpdateCheckSelectsExactTarget(t *testing.T) {
+	previousVersion, previousCommit, previousTarget := BuildVersion, BuildCommit, BuildTarget
+	BuildVersion, BuildCommit, BuildTarget = "v0.2.0", strings.Repeat("1", 40), "windows-amd64"
+	defer func() { BuildVersion, BuildCommit, BuildTarget = previousVersion, previousCommit, previousTarget }()
+	manifest := fmt.Sprintf(`{"schema":1,"version":"v0.3.0","commit":"%s","assets":[{"target":"windows-amd64","kind":"archive","name":"rule-bot-client_v0.3.0_windows_amd64.zip","sha256":"%s","size":123},{"target":"linux-amd64","kind":"archive","name":"rule-bot-client_v0.3.0_linux_amd64.tar.gz","sha256":"%s","size":456}]}`,
+		strings.Repeat("2", 40), strings.Repeat("a", 64), strings.Repeat("b", 64))
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, manifest)
+	}))
+	defer server.Close()
+	info, err := CheckClientUpdate(context.Background(), ClientUpdateOptions{
+		Executable: filepath.Join(t.TempDir(), "rule-bot-client.exe"), ManifestURL: server.URL,
+		HTTPClient: server.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.LatestVersion != "v0.3.0" || info.Asset.Target != "windows-amd64" || info.Asset.Kind != "archive" {
+		t.Fatalf("update info = %#v", info)
+	}
+}
+
+func TestClientUpdateManifestRejectsDuplicateAndDowngrade(t *testing.T) {
+	previousVersion, previousTarget := BuildVersion, BuildTarget
+	BuildVersion, BuildTarget = "v0.3.0", "linux-amd64"
+	defer func() { BuildVersion, BuildTarget = previousVersion, previousTarget }()
+	asset := fmt.Sprintf(`{"target":"linux-amd64","kind":"archive","name":"rule-bot-client_v0.2.0_linux_amd64.tar.gz","sha256":"%s","size":123}`, strings.Repeat("c", 64))
+	for name, assets := range map[string]string{"duplicate": asset + "," + asset, "downgrade": asset} {
+		t.Run(name, func(t *testing.T) {
+			manifest := fmt.Sprintf(`{"schema":1,"version":"v0.2.0","commit":"%s","assets":[%s]}`, strings.Repeat("3", 40), assets)
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { _, _ = io.WriteString(writer, manifest) }))
+			defer server.Close()
+			_, err := CheckClientUpdate(context.Background(), ClientUpdateOptions{
+				Executable: filepath.Join(t.TempDir(), "rule-bot-client"), ManifestURL: server.URL, HTTPClient: server.Client(),
+			})
+			if name == "duplicate" && err == nil {
+				t.Fatal("duplicate update target was accepted")
+			}
+			if name == "downgrade" && !errors.Is(err, ErrNoUpdate) {
+				t.Fatalf("downgrade error = %v", err)
+			}
+		})
+	}
+}
+
+func TestPrepareClientUpdateVerifiesLinuxArchive(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux archive execution")
+	}
+	previousVersion, previousCommit, previousTarget := BuildVersion, BuildCommit, BuildTarget
+	BuildVersion, BuildCommit, BuildTarget = "v0.2.0-test", strings.Repeat("4", 40), "linux-amd64"
+	defer func() { BuildVersion, BuildCommit, BuildTarget = previousVersion, previousCommit, previousTarget }()
+	var archive bytes.Buffer
+	gzipWriter := gzip.NewWriter(&archive)
+	tarWriter := tar.NewWriter(gzipWriter)
+	script := []byte("#!/bin/sh\nprintf '%s\\n' 'rule-bot-client v0.3.0 commit=" + strings.Repeat("5", 40) + " built=test go=test target=linux-amd64'\n")
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "rule-bot-client_v0.3.0_linux_amd64/rule-bot-client", Mode: 0o755, Size: int64(len(script)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write(script); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(archive.Bytes())
+	assetName := "rule-bot-client_v0.3.0_linux_amd64.tar.gz"
+	manifest := fmt.Sprintf(`{"schema":1,"version":"v0.3.0","commit":"%s","assets":[{"target":"linux-amd64","kind":"archive","name":"%s","sha256":"%s","size":%d}]}`,
+		strings.Repeat("5", 40), assetName, hex.EncodeToString(digest[:]), archive.Len())
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/manifest" {
+			_, _ = io.WriteString(writer, manifest)
+			return
+		}
+		if request.URL.Path == "/v0.3.0/"+assetName {
+			_, _ = writer.Write(archive.Bytes())
+			return
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+	target := filepath.Join(t.TempDir(), "rule-bot-client")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\nprintf '%s\\n' 'rule-bot-client v0.2.0-test commit="+strings.Repeat("4", 40)+" built=test go=test target=linux-amd64'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := PrepareClientUpdate(context.Background(), ClientUpdateOptions{
+		Executable: target, ManifestURL: server.URL + "/manifest",
+		ReleaseBaseURL: server.URL + "/", HTTPClient: server.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Abort()
+	if prepared.Info.LatestVersion != "v0.3.0" {
+		t.Fatalf("prepared update = %#v", prepared.Info)
+	}
+	if err := prepared.Activate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	output, err := exec.Command(target, "--version").CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "rule-bot-client v0.3.0") {
+		t.Fatalf("updated identity = %q, error = %v", output, err)
 	}
 }
 

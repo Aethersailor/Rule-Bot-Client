@@ -127,8 +127,10 @@ acknowledgement/state-write crash safe.
 
 ## Release identity
 
-Every binary exposes its semantic version, source commit, build time, and Go
-version through `--version`. Release assets include SHA-256 checksums and GitHub
-artifact attestations. Container images carry matching OCI version and revision
-labels and are verified by digest and exact platform list before a draft release
-is published.
+Every binary exposes its semantic version, source commit, build time, Go version,
+and build target through `--version`. Linux, Windows, and OpenWrt Release assets
+include SHA-256 checksums and GitHub artifact attestations. A machine-readable
+client update manifest binds Linux and Windows targets to exact asset names,
+sizes, hashes, and the release commit. Container images carry matching OCI
+version and revision labels and are verified by digest and exact platform list
+before a draft release is published.

@@ -47,6 +47,15 @@ jobs:
           release_sha=$(git rev-list -n 1 "$RELEASE_TAG")
           test -n "$release_sha"
           git merge-base --is-ancestor "$release_sha" origin/master
+          case "$RELEASE_TAG" in
+            *-*) ;;
+            *)
+              latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
+              if test -n "$latest" && test "$latest" != "$RELEASE_TAG"; then
+                test "$(printf '%s\n%s\n' "$latest" "$RELEASE_TAG" | sort -V | tail -1)" = "$RELEASE_TAG"
+              fi
+              ;;
+          esac
           draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft 2>/dev/null || true)
           if test "$GITHUB_EVENT_NAME" = workflow_dispatch; then
             test "$draft" = false
@@ -80,7 +89,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: stable
+          go-version-file: .go-version
           cache: false
 
       - name: Test release source
@@ -88,6 +97,9 @@ jobs:
           go test -count=1 ./...
           go test -race -count=1 ./...
           go vet ./...
+
+      - name: Install release packaging tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends jq zip
 
       - name: Build deterministic archives and packages
         env:
@@ -98,11 +110,13 @@ jobs:
 
       - name: Verify release asset set and checksums
         run: |
-          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 17
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 20
           test "$(find dist -maxdepth 1 -type f -name 'rule-bot-client_*_linux_*.tar.gz' | wc -l)" -eq 13
           test "$(find dist -maxdepth 1 -type f -name 'rule-bot-client_*.deb' | wc -l)" -eq 3
+          test "$(find dist -maxdepth 1 -type f -name 'rule-bot-client_*_windows_*.zip' | wc -l)" -eq 2
           test "$(find dist -maxdepth 1 -type f -name '*openwrt*' | wc -l)" -eq 0
           test -f dist/checksums.txt
+          test -f dist/client-update-manifest.json
           for archive in dist/rule-bot-client_*_linux_*.tar.gz; do
             package=$(basename "$archive" .tar.gz)
             tar -tzf "$archive" \
@@ -111,6 +125,19 @@ jobs:
               "$package/SECURITY.md" >/dev/null
             test "$(tar -tvzf "$archive" "$package/config.example.json" | awk '{print $1}')" = "-rw-------"
           done
+          for archive in dist/rule-bot-client_*_windows_*.zip; do
+            package=$(basename "$archive" .zip)
+            unzip -l "$archive" \
+              "$package/rule-bot-client.exe" \
+              "$package/config.example.json" \
+              "$package/PRIVACY.md" \
+              "$package/SECURITY.md" >/dev/null
+          done
+          jq -e --arg version "${{ needs.preflight.outputs.version }}" --arg commit "${{ needs.preflight.outputs.commit }}" '
+            .schema == 1 and .version == $version and .commit == $commit and
+            (.assets | length == 18) and
+            ([.assets[] | (.target + ":" + .kind)] | length == (unique | length))
+          ' dist/client-update-manifest.json
           cd dist
           sha256sum -c checksums.txt
 
@@ -131,6 +158,45 @@ jobs:
             case "$GITHUB_REF_NAME" in *-*) prerelease+=(--prerelease) ;; esac
             gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME" "${prerelease[@]}"
           fi
+
+  windows-assets:
+    name: Verify Windows portable assets
+    needs: [preflight, assets]
+    if: >-
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.assets.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Download Windows assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ needs.preflight.outputs.version }}" --repo "$env:GITHUB_REPOSITORY" --pattern "rule-bot-client_*_windows_*.zip" --dir windows-assets
+
+      - name: Verify AMD64 runtime and ARM64 identity
+        shell: pwsh
+        run: |
+          $amd64 = Get-ChildItem windows-assets -Filter '*windows_amd64.zip' | Select-Object -First 1
+          $arm64 = Get-ChildItem windows-assets -Filter '*windows_arm64.zip' | Select-Object -First 1
+          if (-not $amd64 -or -not $arm64) { throw 'Windows asset set is incomplete' }
+          Expand-Archive -LiteralPath $amd64.FullName -DestinationPath windows-amd64
+          Expand-Archive -LiteralPath $arm64.FullName -DestinationPath windows-arm64
+          $amd64Exe = Get-ChildItem windows-amd64 -Recurse -Filter rule-bot-client.exe | Select-Object -First 1
+          $arm64Exe = Get-ChildItem windows-arm64 -Recurse -Filter rule-bot-client.exe | Select-Object -First 1
+          $amd64Config = Get-ChildItem windows-amd64 -Recurse -Filter config.example.json | Select-Object -First 1
+          $identity = & $amd64Exe.FullName --version
+          if ($identity -notlike '*commit=${{ needs.preflight.outputs.commit }}*target=windows-amd64*') { throw "unexpected AMD64 identity: $identity" }
+          & $amd64Exe.FullName --config $amd64Config.FullName --check
+          $arm64Build = go version -m $arm64Exe.FullName | Out-String
+          if ($arm64Build -notmatch 'GOARCH=arm64') { throw "unexpected ARM64 build metadata: $arm64Build" }
 
   image:
     name: Publish and verify container image
@@ -234,7 +300,7 @@ jobs:
 
   publish:
     name: Publish draft release
-    needs: [preflight, assets, image]
+    needs: [preflight, assets, image, windows-assets]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -247,11 +313,13 @@ jobs:
           ready=false
           for attempt in $(seq 1 120); do
             gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
-            if test "$(wc -l < release-assets.txt)" -eq 28 \
+            if test "$(wc -l < release-assets.txt)" -eq 31 \
               && grep -Fx checksums.txt release-assets.txt \
+              && grep -Fx client-update-manifest.json release-assets.txt \
               && grep -Fx openwrt-checksums.txt release-assets.txt \
               && grep -Fx openwrt-manifest.tsv release-assets.txt \
               && grep -Fx install-rule-bot-client-openwrt.sh release-assets.txt \
+              && test "$(grep -Ec '^rule-bot-client_.*_windows_(amd64|arm64)\.zip$' release-assets.txt)" -eq 2 \
               && test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq 8; then
               ready=true
               break
@@ -260,3 +328,98 @@ jobs:
           done
           test "$ready" = true
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  public-update-linux:
+    name: Verify public Linux automatic updates
+    if: github.event_name == 'workflow_dispatch'
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.commit }}
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Build pre-release test candidate
+        env:
+          TARGET_ARCH: amd64
+          TARGET_LABEL: linux-amd64
+          OUTPUT: update-smoke/rule-bot-client
+          VERSION: v0.2.0-test
+          COMMIT: ${{ needs.preflight.outputs.commit }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: |
+          mkdir -p update-smoke
+          sh scripts/build-one.sh
+          printf '%s\n' '{"version":1,"output":"data/domains.txt","status_file":"data/status.json","runtime_cache_dir":"data/cache","flush_interval":"5s","include_failed_connections":true,"include_single_label_hosts":false,"auto_update":false,"rule_bot":{"enabled":false,"send_existing":false},"instances":[{"name":"unreachable","url":"http://127.0.0.1:9","secret":"test-secret"}]}' > update-smoke/config.json
+
+      - name: Update raw Linux binary from the public Release
+        run: |
+          update-smoke/rule-bot-client --config update-smoke/config.json --update-apply
+          update-smoke/rule-bot-client --version | grep -F 'rule-bot-client ${{ needs.preflight.outputs.version }} commit=${{ needs.preflight.outputs.commit }}'
+          update-smoke/rule-bot-client --config update-smoke/config.json --check
+
+      - name: Update an installed Debian package from the public Release
+        run: |
+          TARGET_ARCH=amd64 TARGET_LABEL=linux-amd64 VERSION=v0.2.0-test COMMIT=${{ needs.preflight.outputs.commit }} BUILD_DATE=1970-01-01T00:00:00Z OUTPUT=update-smoke/rule-bot-client-old sh scripts/build-one.sh
+          sh scripts/package-deb.sh amd64 update-smoke/rule-bot-client-old v0.2.0-test update-smoke
+          sudo apt-get install -y ./update-smoke/rule-bot-client_0.2.0-test_amd64.deb
+          sudo /usr/bin/rule-bot-client --config /etc/rule-bot-client/config.json --update-apply
+          /usr/bin/rule-bot-client --version | grep -F 'rule-bot-client ${{ needs.preflight.outputs.version }} commit=${{ needs.preflight.outputs.commit }}'
+          sudo apt-get remove -y rule-bot-client
+
+  public-update-windows:
+    name: Verify public Windows automatic update
+    if: github.event_name == 'workflow_dispatch'
+    needs: preflight
+    runs-on: windows-2025
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.commit }}
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Build and start pre-release Windows candidate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path update-smoke | Out-Null
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          $env:CGO_ENABLED = '0'
+          go build -buildvcs=false -trimpath -ldflags '-s -w -buildid= -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildVersion=v0.2.0-test -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildCommit=${{ needs.preflight.outputs.commit }} -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildDate=1970-01-01T00:00:00Z -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildTarget=windows-amd64' -o update-smoke/rule-bot-client.exe ./cmd/rule-bot-client
+          Copy-Item deploy/windows/config.json update-smoke/config.json
+          Start-Process -FilePath "$PWD/update-smoke/rule-bot-client.exe" -ArgumentList '--config', "$PWD/update-smoke/config.json" -WindowStyle Hidden
+
+      - name: Wait for automatic replacement and verify identity
+        shell: pwsh
+        run: |
+          $expectedVersion = 'rule-bot-client ${{ needs.preflight.outputs.version }}'
+          $expectedCommit = 'commit=${{ needs.preflight.outputs.commit }}'
+          $verified = $false
+          for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            Start-Sleep -Seconds 1
+            try {
+              $identity = & .\update-smoke\rule-bot-client.exe --version 2>$null
+              if ($identity -like "*$expectedVersion*" -and $identity -like "*$expectedCommit*" -and $identity -like '*target=windows-amd64*') {
+                $verified = $true
+                break
+              }
+            } catch {}
+          }
+          if (-not $verified) { throw 'Windows portable executable was not automatically replaced' }
+          & .\update-smoke\rule-bot-client.exe --config .\update-smoke\config.json --check
+          $status = Get-Content .\update-smoke\data\update-status.json -Raw | ConvertFrom-Json
+          if ($status.state -ne 'completed') { throw "unexpected update status: $($status | ConvertTo-Json -Compress)" }
+          Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq "$PWD\update-smoke\rule-bot-client.exe" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }

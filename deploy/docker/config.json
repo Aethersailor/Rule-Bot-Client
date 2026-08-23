@@ -5,6 +5,7 @@
   "flush_interval": "5s",
   "include_failed_connections": true,
   "include_single_label_hosts": false,
+  "auto_update": false,
   "rule_bot": {
     "enabled": false,
     "endpoint": "https://rule-bot.example.com/api/v1/rule-bot-client/replace-with-your-private-path",
