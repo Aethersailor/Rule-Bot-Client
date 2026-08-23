@@ -117,7 +117,13 @@ func runClient(ctx context.Context, cfg client.Config, configPath string, logger
 	go func() { result <- client.Run(runCtx, cfg, logger) }()
 	prepared := make(chan *client.PreparedClientUpdate, 1)
 	go func() {
-		timer := time.NewTimer(5 * time.Second)
+		initialDelay := 5 * time.Second
+		if os.Getenv("RULE_BOT_CLIENT_UPDATE_RECOVERED") != "" {
+			_ = os.Unsetenv("RULE_BOT_CLIENT_UPDATE_RECOVERED")
+			initialDelay = 24 * time.Hour
+			logger.Printf("WARN automatic update delayed after restoring the previous version")
+		}
+		timer := time.NewTimer(initialDelay)
 		defer timer.Stop()
 		for {
 			select {

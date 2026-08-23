@@ -16,6 +16,7 @@ import (
 )
 
 const updateCleanupEnvironment = "RULE_BOT_CLIENT_UPDATE_CLEANUP"
+const updateRecoveredEnvironment = "RULE_BOT_CLIENT_UPDATE_RECOVERED"
 
 type windowsUpdatePlan struct {
 	Target     string   `json:"target"`
@@ -169,6 +170,21 @@ func replaceWindowsExecutable(source, target string, timeout time.Duration) erro
 	}
 }
 
+func startWindowsUpdateTarget(plan windowsUpdatePlan, recovered bool) error {
+	command := exec.Command(plan.Target, plan.Args...)
+	command.Env = append(os.Environ(), updateCleanupEnvironment+"="+plan.WorkDir)
+	if recovered {
+		command.Env = append(command.Env, updateRecoveredEnvironment+"=1")
+	}
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Start(); err != nil {
+		return err
+	}
+	_ = command.Process.Release()
+	return nil
+}
+
 func RunClientUpdateHelper(planPath string) error {
 	data, err := os.ReadFile(planPath)
 	if err != nil {
@@ -192,17 +208,16 @@ func RunClientUpdateHelper(planPath string) error {
 		writeWindowsUpdateStatus(plan.StatusPath, "failed", err)
 		return err
 	}
-	command := exec.Command(plan.Target, plan.Args...)
-	command.Env = append(os.Environ(), updateCleanupEnvironment+"="+plan.WorkDir)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	if err := command.Start(); err != nil {
+	if err := startWindowsUpdateTarget(plan, false); err != nil {
 		restoreErr := replaceWindowsExecutable(plan.Backup, plan.Target, 5*time.Second)
-		combined := errors.Join(err, restoreErr)
+		var restartErr error
+		if restoreErr == nil {
+			restartErr = startWindowsUpdateTarget(plan, true)
+		}
+		combined := errors.Join(err, restoreErr, restartErr)
 		writeWindowsUpdateStatus(plan.StatusPath, "failed", combined)
 		return combined
 	}
-	_ = command.Process.Release()
 	writeWindowsUpdateStatus(plan.StatusPath, "completed", nil)
 	return nil
 }
