@@ -10,11 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -34,12 +31,12 @@ const (
 )
 
 var (
-	releaseManifestPathPattern = regexp.MustCompile(`^/Aethersailor/Rule-Bot-Client/releases/download/(v[0-9]+\.[0-9]+\.[0-9]+)/openwrt-manifest\.tsv$`)
-	stableVersionPattern       = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)$`)
-	buildVersionPattern        = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:_git[0-9]+)?$`)
-	updateAssetPattern         = regexp.MustCompile(`^luci-app-rule-bot-client[-_+.0-9A-Za-z]+\.(?:ipk|apk)$`)
-	updateArchitecturePattern  = regexp.MustCompile(`^[0-9A-Za-z_+-]+$`)
-	updateSHA256Pattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	stableVersionPattern      = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)$`)
+	buildVersionPattern       = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:_git[0-9]+)?$`)
+	updateAssetPattern        = regexp.MustCompile(`^luci-app-rule-bot-client[-_+.0-9A-Za-z]+\.(?:ipk|apk)$`)
+	updateAssetVersionPattern = regexp.MustCompile(`^luci-app-rule-bot-client[-_]([0-9]+\.[0-9]+\.[0-9]+)-r[0-9]+`)
+	updateArchitecturePattern = regexp.MustCompile(`^[0-9A-Za-z_+-]+$`)
+	updateSHA256Pattern       = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 type updateVersion struct {
@@ -205,99 +202,52 @@ func selectUpdatePackage(packages []updatePackage, environment updateEnvironment
 	return selected, nil
 }
 
-func releaseTagFromManifestURL(value string, testing bool) (string, error) {
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return "", errors.New("latest Release returned an invalid manifest URL")
-	}
-	if !testing && (parsed.Scheme != "https" || !strings.EqualFold(parsed.Hostname(), "github.com")) {
-		return "", errors.New("latest Release redirected outside the expected GitHub repository")
-	}
-	match := releaseManifestPathPattern.FindStringSubmatch(parsed.Path)
+func updateVersionFromAsset(asset string) (string, error) {
+	match := updateAssetVersionPattern.FindStringSubmatch(asset)
 	if match == nil {
-		return "", errors.New("latest Release redirect does not identify a stable version")
+		return "", errors.New("matching Release package does not identify a stable version")
 	}
 	return match[1], nil
 }
 
-func (b Backend) updateManifestURL() string {
-	if b.Testing && b.UpdateManifestURL != "" {
-		return b.UpdateManifestURL
+func (b Backend) fetchUpdateFile(ctx context.Context, target, destination string) error {
+	if b.Testing {
+		return errors.New("update downloads are unavailable in an offline test root")
 	}
-	return latestOpenWrtManifestURL
-}
-
-func (b Backend) updateHTTPClient(followRedirects bool) *http.Client {
-	client := &http.Client{Timeout: 30 * time.Second}
-	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
-		if !followRedirects {
-			return http.ErrUseLastResponse
-		}
-		if len(via) >= 6 {
-			return errors.New("too many update download redirects")
-		}
-		if !b.Testing && request.URL.Scheme != "https" {
-			return errors.New("update download redirected to a non-HTTPS URL")
-		}
-		return nil
+	if _, err := os.Stat("/bin/uclient-fetch"); err == nil {
+		_, err = b.runUpdateCommand(ctx, "/bin/uclient-fetch", "-O", destination, target)
+		return err
 	}
-	return client
-}
-
-func newUpdateRequest(ctx context.Context, method, target string) (*http.Request, error) {
-	request, err := http.NewRequestWithContext(ctx, method, target, nil)
-	if err != nil {
-		return nil, err
+	if _, err := os.Stat("/usr/bin/wget"); err == nil {
+		_, err = b.runUpdateCommand(ctx, "/usr/bin/wget", "-O", destination, target)
+		return err
 	}
-	request.Header.Set("User-Agent", "Rule-Bot-Client-OpenWrt-Updater")
-	request.Header.Set("Accept", "application/octet-stream")
-	return request, nil
-}
-
-func (b Backend) resolveLatestManifest(ctx context.Context) (string, string, error) {
-	request, err := newUpdateRequest(ctx, http.MethodHead, b.updateManifestURL())
-	if err != nil {
-		return "", "", err
-	}
-	response, err := b.updateHTTPClient(false).Do(request)
-	if err != nil {
-		return "", "", fmt.Errorf("check latest Release: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 300 || response.StatusCode >= 400 {
-		return "", "", fmt.Errorf("check latest Release: unexpected HTTP status %d", response.StatusCode)
-	}
-	location, err := response.Location()
-	if err != nil {
-		return "", "", errors.New("latest Release did not return a download location")
-	}
-	location = response.Request.URL.ResolveReference(location)
-	tag, err := releaseTagFromManifestURL(location.String(), b.Testing)
-	if err != nil {
-		return "", "", err
-	}
-	return tag, location.String(), nil
+	return errors.New("neither uclient-fetch nor wget is available")
 }
 
 func (b Backend) fetchUpdateManifest(ctx context.Context, target string) ([]updatePackage, error) {
-	request, err := newUpdateRequest(ctx, http.MethodGet, target)
+	file, err := os.CreateTemp("/tmp", "rule-bot-client-manifest-*")
 	if err != nil {
 		return nil, err
 	}
-	response, err := b.updateHTTPClient(true).Do(request)
-	if err != nil {
+	name := file.Name()
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+	defer os.Remove(name)
+	if err := b.fetchUpdateFile(ctx, target, name); err != nil {
 		return nil, fmt.Errorf("download update manifest: %w", err)
 	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download update manifest: HTTP %d", response.StatusCode)
+	info, err := os.Stat(name)
+	if err != nil {
+		return nil, fmt.Errorf("inspect update manifest: %w", err)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxUpdateManifestBytes+1))
+	if info.Size() > maxUpdateManifestBytes {
+		return nil, errors.New("update manifest exceeds 128 KiB")
+	}
+	data, err := os.ReadFile(name)
 	if err != nil {
 		return nil, fmt.Errorf("read update manifest: %w", err)
-	}
-	if len(data) > maxUpdateManifestBytes {
-		return nil, errors.New("update manifest exceeds 128 KiB")
 	}
 	return parseUpdateManifest(data)
 }
@@ -391,11 +341,7 @@ func (b Backend) resolveUpdate(ctx context.Context) (UpdateInfo, updateEnvironme
 	if err != nil {
 		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
 	}
-	tag, manifestURL, err := b.resolveLatestManifest(ctx)
-	if err != nil {
-		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
-	}
-	packages, err := b.fetchUpdateManifest(ctx, manifestURL)
+	packages, err := b.fetchUpdateManifest(ctx, latestOpenWrtManifestURL)
 	if err != nil {
 		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
 	}
@@ -403,6 +349,11 @@ func (b Backend) resolveUpdate(ctx context.Context) (UpdateInfo, updateEnvironme
 	if err != nil {
 		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
 	}
+	latestText, err := updateVersionFromAsset(selected.Asset)
+	if err != nil {
+		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
+	}
+	tag := "v" + latestText
 	warning, err := updateCompatibilityWarning(b.Root, selected.SDKURL)
 	if err != nil {
 		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
@@ -415,7 +366,6 @@ func (b Backend) resolveUpdate(ctx context.Context) (UpdateInfo, updateEnvironme
 	if err != nil {
 		return UpdateInfo{}, updateEnvironment{}, updatePackage{}, err
 	}
-	latestText := strings.TrimPrefix(tag, "v")
 	info := UpdateInfo{
 		CurrentVersion: client.BuildVersion, LatestVersion: latestText, Tag: tag,
 		Available:      compareUpdateVersions(current, latest) < 0,
@@ -517,46 +467,25 @@ func (b Backend) acquireUpdateLock() (func(), error) {
 }
 
 func (b Backend) exactManifestURL(tag string) string {
-	if b.Testing && b.UpdateManifestURL != "" {
-		latest, _ := url.Parse(b.UpdateManifestURL)
-		latest.Path = "/Aethersailor/Rule-Bot-Client/releases/download/" + tag + "/openwrt-manifest.tsv"
-		latest.RawQuery = ""
-		latest.Fragment = ""
-		return latest.String()
-	}
 	return openWrtReleaseBaseURL + tag + "/openwrt-manifest.tsv"
 }
 
 func (b Backend) packageURL(tag, asset string) string {
-	manifestURL, _ := url.Parse(b.exactManifestURL(tag))
-	manifestURL.Path = path.Join(path.Dir(manifestURL.Path), asset)
-	return manifestURL.String()
+	return openWrtReleaseBaseURL + tag + "/" + asset
 }
 
 func (b Backend) downloadPackage(ctx context.Context, tag string, item updatePackage, destination string) error {
-	request, err := newUpdateRequest(ctx, http.MethodGet, b.packageURL(tag, item.Asset))
-	if err != nil {
-		return err
-	}
-	response, err := b.updateHTTPClient(true).Do(request)
-	if err != nil {
+	if err := b.fetchUpdateFile(ctx, b.packageURL(tag, item.Asset), destination); err != nil {
 		return fmt.Errorf("download package: %w", err)
 	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("download package: HTTP %d", response.StatusCode)
-	}
-	if response.ContentLength > maxUpdatePackageBytes || response.ContentLength > item.Size {
-		return errors.New("downloaded package exceeds the expected size")
-	}
-	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	file, err := os.Open(destination)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	hash := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, maxUpdatePackageBytes+1))
-	closeErr := file.Close()
-	if err := errors.Join(copyErr, closeErr); err != nil {
+	written, err := io.Copy(hash, io.LimitReader(file, maxUpdatePackageBytes+1))
+	if err != nil {
 		return err
 	}
 	if written != item.Size {
@@ -583,6 +512,10 @@ func (b Backend) rollbackPackage(ctx context.Context, environment updateEnvironm
 	item, err := selectUpdatePackage(packages, environment)
 	if err != nil {
 		return updatePackage{}, fmt.Errorf("prepare rollback package: %w", err)
+	}
+	version, err := updateVersionFromAsset(item.Asset)
+	if err != nil || "v"+version != currentTag {
+		return updatePackage{}, errors.New("rollback manifest does not match the installed version")
 	}
 	return item, nil
 }

@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -831,49 +828,19 @@ func TestUpdateManifestRejectsDuplicateOrUnsafeEntries(t *testing.T) {
 	}
 }
 
-func TestReleaseManifestRedirectRequiresStableRepositoryPath(t *testing.T) {
-	tag, err := releaseTagFromManifestURL("https://github.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv", false)
-	if err != nil || tag != "v0.2.1" {
-		t.Fatalf("tag = %q, error = %v", tag, err)
-	}
-	for _, value := range []string{
-		"https://example.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv",
-		"https://github.com/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1-beta/openwrt-manifest.tsv",
+func TestUpdateAssetIdentifiesStableVersion(t *testing.T) {
+	for _, asset := range []string{
+		"luci-app-rule-bot-client-0.2.1-r1_x86_64.apk",
+		"luci-app-rule-bot-client_0.2.1-r1_x86_64.ipk",
 	} {
-		if _, err := releaseTagFromManifestURL(value, false); err == nil {
-			t.Fatalf("unsafe Release redirect was accepted: %s", value)
+		version, err := updateVersionFromAsset(asset)
+		if err != nil || version != "0.2.1" {
+			t.Fatalf("asset = %q, version = %q, error = %v", asset, version, err)
 		}
 	}
-}
-
-func TestLatestReleaseRedirectFetchesExactManifest(t *testing.T) {
-	manifest := "format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" +
-		"apk\tx86_64\tluci-app-rule-bot-client-0.2.1-r1_x86_64.apk\t" + strings.Repeat("d", 64) + "\t5000000\thttps://downloads.openwrt.org/releases/25.12.0/targets/x86/64/sdk.tar.zst\n"
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		switch request.URL.Path {
-		case "/latest/openwrt-manifest.tsv":
-			writer.Header().Set("Location", serverURL(request)+"/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv")
-			writer.WriteHeader(http.StatusFound)
-		case "/Aethersailor/Rule-Bot-Client/releases/download/v0.2.1/openwrt-manifest.tsv":
-			_, _ = io.WriteString(writer, manifest)
-		default:
-			http.NotFound(writer, request)
-		}
-	}))
-	defer server.Close()
-	backend := Backend{Testing: true, UpdateManifestURL: server.URL + "/latest/openwrt-manifest.tsv"}
-	tag, target, err := backend.resolveLatestManifest(context.Background())
-	if err != nil || tag != "v0.2.1" {
-		t.Fatalf("tag = %q, target = %q, error = %v", tag, target, err)
+	if _, err := updateVersionFromAsset("luci-app-rule-bot-client-0.2.1-beta-r1_x86_64.apk"); err == nil {
+		t.Fatal("prerelease package name was accepted as stable")
 	}
-	packages, err := backend.fetchUpdateManifest(context.Background(), target)
-	if err != nil || len(packages) != 1 || packages[0].Architecture != "x86_64" {
-		t.Fatalf("packages = %#v, error = %v", packages, err)
-	}
-}
-
-func serverURL(request *http.Request) string {
-	return "http://" + request.Host
 }
 
 func TestAutomaticUpdateSettingRoundTrips(t *testing.T) {

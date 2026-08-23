@@ -19,9 +19,8 @@ import (
 )
 
 type Backend struct {
-	Root              string
-	Testing           bool
-	UpdateManifestURL string
+	Root    string
+	Testing bool
 }
 
 type fileSnapshot struct {
