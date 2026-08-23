@@ -605,7 +605,7 @@ func (b Backend) ensureUpdateSpace(newSize, oldSize int64) error {
 func (b Backend) installLocalPackage(ctx context.Context, environment updateEnvironment, filename string, rollback bool) error {
 	switch environment.Manager {
 	case "apk":
-		_, err := b.runUpdateCommand(ctx, "/usr/bin/apk", "add", "--allow-untrusted", "--network=false", "--force-reinstall", filename)
+		_, err := b.runUpdateCommand(ctx, "/usr/bin/apk", "add", "--allow-untrusted", "--no-network", "--force-reinstall", filename)
 		return err
 	case "opkg":
 		args := []string{"install"}

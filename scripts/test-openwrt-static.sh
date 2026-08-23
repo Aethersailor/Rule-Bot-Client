@@ -67,6 +67,11 @@ fi
 grep -F 'api.updateCheck()' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
 grep -F 'api.updateConfig(automatic.checked)' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
 grep -F 'api.updateStart()' "$root/www/luci-static/resources/view/rule_bot_client/update.js"
+grep -F '"--no-network"' internal/openwrt/update.go
+if grep -F '"--network=false"' internal/openwrt/update.go; then
+  echo 'APK 3 requires --no-network instead of --network=false' >&2
+  exit 1
+fi
 
 for file in "$root"/usr/share/rpcd/acl.d/*.json "$root"/usr/share/luci/menu.d/*.json; do
   jq -e . "$file" >/dev/null
