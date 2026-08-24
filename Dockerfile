@@ -6,8 +6,12 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /src
 COPY go.mod go.sum ./
-COPY cmd ./cmd
-COPY internal ./internal
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY cmd/rule-bot-client ./cmd/rule-bot-client
+COPY internal/client ./internal/client
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -16,7 +20,9 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-RUN set -eu; \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    set -eu; \
     export CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH"; \
     if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     go build -buildvcs=false -trimpath \
