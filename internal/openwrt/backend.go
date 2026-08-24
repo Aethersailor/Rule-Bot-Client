@@ -217,7 +217,9 @@ func (b Backend) save(ctx context.Context, settings Settings) (response SaveResp
 	} else if err := b.runService("stop"); err != nil {
 		return response, err
 	}
-	removeOrphanCredentials(b.Root, existing, settings)
+	if err := removeOrphanCredentials(b.Root, existing, settings); err != nil {
+		return response, err
+	}
 	committed = true
 	settings, _ = LoadSettings(b.Root)
 	return SaveResponse{OK: true, Config: settingsForEditor(settings), Warnings: settings.Warnings}, nil
@@ -331,7 +333,9 @@ func (b Backend) writeCredentials(existing Settings, settings *Settings) error {
 		secretPath := rooted(b.Root, sourceSecretPath(source.ID))
 		switch {
 		case source.ClearSecret:
-			_ = os.Remove(secretPath)
+			if err := removeManagedFile(secretPath); err != nil {
+				return fmt.Errorf("clear source %q secret: %w", source.ID, err)
+			}
 		case source.Secret != "":
 			if err := validateSecret(source.Secret); err != nil {
 				return fmt.Errorf("source %q secret: %w", source.ID, err)
@@ -344,12 +348,16 @@ func (b Backend) writeCredentials(existing Settings, settings *Settings) error {
 			}
 		case source.PreserveSecret || old.SecretSet:
 		default:
-			_ = os.Remove(secretPath)
+			if err := removeManagedFile(secretPath); err != nil {
+				return fmt.Errorf("remove source %q secret: %w", source.ID, err)
+			}
 		}
 		caPath := rooted(b.Root, sourceCAPath(source.ID))
 		switch {
 		case source.ClearCA:
-			_ = os.Remove(caPath)
+			if err := removeManagedFile(caPath); err != nil {
+				return fmt.Errorf("clear source %q CA: %w", source.ID, err)
+			}
 		case strings.TrimSpace(source.CAPEM) != "":
 			if err := validateCAPEM(source.CAPEM); err != nil {
 				return fmt.Errorf("source %q CA: %w", source.ID, err)
@@ -362,7 +370,9 @@ func (b Backend) writeCredentials(existing Settings, settings *Settings) error {
 			}
 		case source.PreserveCA || old.CASet:
 		default:
-			_ = os.Remove(caPath)
+			if err := removeManagedFile(caPath); err != nil {
+				return fmt.Errorf("remove source %q CA: %w", source.ID, err)
+			}
 		}
 		source.Secret = ""
 		source.CAPEM = ""
@@ -372,7 +382,9 @@ func (b Backend) writeCredentials(existing Settings, settings *Settings) error {
 	tokenPath := rooted(b.Root, ruleBotTokenPath())
 	switch {
 	case settings.RuleBot.ClearToken:
-		_ = os.Remove(tokenPath)
+		if err := removeManagedFile(tokenPath); err != nil {
+			return fmt.Errorf("clear Rule-Bot token: %w", err)
+		}
 	case settings.RuleBot.Token != "":
 		if err := validateSecret(settings.RuleBot.Token); err != nil {
 			return fmt.Errorf("Rule-Bot token: %w", err)
@@ -385,7 +397,9 @@ func (b Backend) writeCredentials(existing Settings, settings *Settings) error {
 		}
 	case settings.RuleBot.PreserveToken || existing.RuleBot.TokenSet:
 	default:
-		_ = os.Remove(tokenPath)
+		if err := removeManagedFile(tokenPath); err != nil {
+			return fmt.Errorf("remove Rule-Bot token: %w", err)
+		}
 	}
 	settings.RuleBot.Token = ""
 	settings.RuleBot.TokenSet = regularNonempty(tokenPath)
@@ -410,7 +424,15 @@ func validateSecret(value string) error {
 	return nil
 }
 
-func removeOrphanCredentials(root string, oldSettings, newSettings Settings) {
+func removeManagedFile(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+func removeOrphanCredentials(root string, oldSettings, newSettings Settings) error {
 	keep := map[string]struct{}{}
 	for _, source := range newSettings.Sources {
 		keep[source.ID] = struct{}{}
@@ -419,9 +441,14 @@ func removeOrphanCredentials(root string, oldSettings, newSettings Settings) {
 		if _, exists := keep[source.ID]; exists || !sourceIDPattern.MatchString(source.ID) {
 			continue
 		}
-		_ = os.Remove(rooted(root, sourceSecretPath(source.ID)))
-		_ = os.Remove(rooted(root, sourceCAPath(source.ID)))
+		if err := removeManagedFile(rooted(root, sourceSecretPath(source.ID))); err != nil {
+			return fmt.Errorf("remove orphan source %q secret: %w", source.ID, err)
+		}
+		if err := removeManagedFile(rooted(root, sourceCAPath(source.ID))); err != nil {
+			return fmt.Errorf("remove orphan source %q CA: %w", source.ID, err)
+		}
 	}
+	return nil
 }
 
 func (b Backend) checkConfig(ctx context.Context) error {
