@@ -11,6 +11,8 @@ import (
 
 const runtimeStatusVersion = 1
 
+const runtimeStatusRefreshInterval = 5 * time.Second
+
 type RuntimeStatus struct {
 	Version   int                       `json:"version"`
 	StartedAt time.Time                 `json:"started_at"`
@@ -88,7 +90,7 @@ func (r *statusReporter) run(done <-chan struct{}) {
 		return
 	}
 	r.write()
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(runtimeStatusRefreshInterval)
 	defer ticker.Stop()
 	for {
 		select {
