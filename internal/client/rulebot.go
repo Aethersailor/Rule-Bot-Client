@@ -74,7 +74,7 @@ func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
 	var token string
 	switch {
 	case cfg.TokenFile != "":
-		data, err := os.ReadFile(cfg.TokenFile)
+		data, err := readBoundedFile(cfg.TokenFile, "token_file", maxCredentialBytes)
 		if err != nil {
 			return "", fmt.Errorf("read token_file: %w", err)
 		}
@@ -92,6 +92,9 @@ func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
 	}
 	if token == "" {
 		return "", errors.New("configured Rule-Bot token is empty")
+	}
+	if len(token) > maxCredentialBytes {
+		return "", fmt.Errorf("Rule-Bot token exceeds %d bytes", maxCredentialBytes)
 	}
 	for index := range len(token) {
 		if token[index] < 0x20 || token[index] == 0x7f {
@@ -453,7 +456,14 @@ func loadRuleBotState(path string) (ruleBotState, bool, error) {
 		return ruleBotState{}, false, fmt.Errorf("open Rule-Bot state: %w", err)
 	}
 	defer file.Close()
-	decoder := json.NewDecoder(io.LimitReader(file, 4097))
+	data, err := io.ReadAll(io.LimitReader(file, 4097))
+	if err != nil {
+		return ruleBotState{}, false, fmt.Errorf("read Rule-Bot state: %w", err)
+	}
+	if len(data) > 4096 {
+		return ruleBotState{}, false, errors.New("Rule-Bot state exceeds 4096 bytes")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var state ruleBotState
 	if err := decoder.Decode(&state); err != nil {

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,11 +9,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
 
-const ConfigVersion = 1
+const (
+	ConfigVersion      = 1
+	maxConfigFileBytes = 4 * 1024 * 1024
+)
 
 type DomainMode string
 
@@ -122,7 +127,14 @@ func LoadConfig(path string) (Config, error) {
 		FlushInterval:            Duration(5 * time.Second),
 		IncludeFailedConnections: true,
 	}
-	decoder := json.NewDecoder(file)
+	data, err := io.ReadAll(io.LimitReader(file, maxConfigFileBytes+1))
+	if err != nil {
+		return Config{}, fmt.Errorf("read config: %w", err)
+	}
+	if len(data) > maxConfigFileBytes {
+		return Config{}, fmt.Errorf("config exceeds %d bytes", maxConfigFileBytes)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
@@ -142,7 +154,84 @@ func LoadConfig(path string) (Config, error) {
 	if err := cfg.validate(filepath.Dir(configPath)); err != nil {
 		return Config{}, err
 	}
+	if err := cfg.validateManagedPaths(configPath); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+type configuredPath struct {
+	name string
+	path string
+}
+
+func comparablePath(path string) string {
+	path = filepath.Clean(path)
+	if runtime.GOOS == "windows" {
+		path = strings.ToLower(path)
+	}
+	return path
+}
+
+func (c Config) validateManagedPaths(configPath string) error {
+	writable := []configuredPath{{name: "output", path: c.Output}}
+	outputCache := c.Output + ".dedupe-cache"
+	if c.StatusFile != "" {
+		writable = append(writable, configuredPath{name: "status_file", path: c.StatusFile})
+	}
+	if c.RuntimeCacheDir != "" {
+		writable = append(writable, configuredPath{name: "runtime_cache_dir", path: c.RuntimeCacheDir})
+		outputCache = filepath.Join(c.RuntimeCacheDir, "domains.dedupe-cache")
+	}
+	writable = append(writable, configuredPath{name: "output dedupe cache", path: outputCache})
+	if c.RuleBot.Enabled {
+		ruleBotCache := c.RuleBot.StateFile + ".dedupe-cache"
+		if c.RuntimeCacheDir != "" {
+			ruleBotCache = filepath.Join(c.RuntimeCacheDir, "rulebot.dedupe-cache")
+		}
+		writable = append(
+			writable,
+			configuredPath{name: "rule_bot.state_file", path: c.RuleBot.StateFile},
+			configuredPath{name: "Rule-Bot dedupe cache", path: ruleBotCache},
+		)
+	}
+
+	seen := make(map[string]string, len(writable))
+	for _, item := range writable {
+		key := comparablePath(item.path)
+		if previous, exists := seen[key]; exists {
+			return fmt.Errorf("%s must differ from %s", item.name, previous)
+		}
+		seen[key] = item.name
+	}
+
+	inputs := []configuredPath{{name: "configuration file", path: configPath}}
+	for index, instance := range c.Instances {
+		if instance.SecretFile != "" {
+			inputs = append(inputs, configuredPath{
+				name: fmt.Sprintf("instances[%d].secret_file", index), path: instance.SecretFile,
+			})
+		}
+		if instance.TLS.CAFile != "" {
+			inputs = append(inputs, configuredPath{
+				name: fmt.Sprintf("instances[%d].tls.ca_file", index), path: instance.TLS.CAFile,
+			})
+		}
+	}
+	if c.RuleBot.Enabled {
+		if c.RuleBot.TokenFile != "" {
+			inputs = append(inputs, configuredPath{name: "rule_bot.token_file", path: c.RuleBot.TokenFile})
+		}
+		if c.RuleBot.Privacy.ExcludeFile != "" {
+			inputs = append(inputs, configuredPath{name: "rule_bot.privacy.exclude_file", path: c.RuleBot.Privacy.ExcludeFile})
+		}
+	}
+	for _, input := range inputs {
+		if managed, exists := seen[comparablePath(input.path)]; exists {
+			return fmt.Errorf("%s must differ from %s", input.name, managed)
+		}
+	}
+	return nil
 }
 
 func (c *Config) validate(configDir string) error {

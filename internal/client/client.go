@@ -16,7 +16,11 @@ import (
 	"time"
 )
 
-const maxConnectionsSnapshot = 16 * 1024 * 1024
+const (
+	maxConnectionsSnapshot = 16 * 1024 * 1024
+	maxCredentialBytes     = 4096
+	maxCAFileBytes         = 4 * 1024 * 1024
+)
 
 type controllerInstance struct {
 	config InstanceConfig
@@ -93,7 +97,7 @@ func resolveSecret(cfg InstanceConfig) (string, error) {
 	configured := true
 	switch {
 	case cfg.SecretFile != "":
-		data, err := os.ReadFile(cfg.SecretFile)
+		data, err := readBoundedFile(cfg.SecretFile, "secret_file", maxCredentialBytes)
 		if err != nil {
 			return "", fmt.Errorf("read secret_file: %w", err)
 		}
@@ -112,6 +116,9 @@ func resolveSecret(cfg InstanceConfig) (string, error) {
 	if configured && secret == "" {
 		return "", errors.New("configured controller secret is empty")
 	}
+	if len(secret) > maxCredentialBytes {
+		return "", fmt.Errorf("controller secret exceeds %d bytes", maxCredentialBytes)
+	}
 	for index := 0; index < len(secret); index++ {
 		if secret[index] < 0x20 || secret[index] == 0x7f {
 			return "", errors.New("controller secret contains an HTTP control character")
@@ -129,7 +136,7 @@ func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
 	if cfg.CAFile == "" {
 		return tlsConfig, nil
 	}
-	pem, err := os.ReadFile(cfg.CAFile)
+	pem, err := readBoundedFile(cfg.CAFile, "TLS ca_file", maxCAFileBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read TLS ca_file: %w", err)
 	}
@@ -142,6 +149,22 @@ func buildTLSConfig(cfg TLSConfig) (*tls.Config, error) {
 	}
 	tlsConfig.RootCAs = pool
 	return tlsConfig, nil
+}
+
+func readBoundedFile(path, label string, limit int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s exceeds %d bytes", label, limit)
+	}
+	return data, nil
 }
 
 func (c *controllerInstance) endpoint(path string, query url.Values) string {
