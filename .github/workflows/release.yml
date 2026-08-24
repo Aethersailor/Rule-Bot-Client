@@ -205,7 +205,7 @@ jobs:
           if ($arm64Build -notmatch 'GOARCH=arm64') { throw "unexpected ARM64 build metadata: $arm64Build" }
 
   image:
-    name: Publish and verify container image
+    name: Publish or reconcile and verify container image
     needs: [preflight, assets]
     if: >-
       always() &&
@@ -218,7 +218,7 @@ jobs:
       id-token: write
       attestations: write
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.build.outputs.digest || steps.reconcile.outputs.digest }}
     steps:
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,6 +243,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Generate image metadata
+        if: github.event_name == 'push'
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -256,6 +257,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(needs.preflight.outputs.version, '-') }}
 
       - name: Build and push exact two-platform image
+        if: github.event_name == 'push'
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -270,6 +272,27 @@ jobs:
             COMMIT=${{ needs.preflight.outputs.commit }}
             BUILD_DATE=${{ needs.preflight.outputs.build_date }}
 
+      - name: Reconcile Docker Hub with attested GHCR image
+        if: github.event_name == 'workflow_dispatch'
+        id: reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          GHCR_IMAGE: ${{ needs.preflight.outputs.image }}
+          DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
+        run: |
+          image_tag=${VERSION#v}
+          gh attestation verify "oci://$GHCR_IMAGE:$image_tag" --repo "$GITHUB_REPOSITORY"
+          digest=$(docker buildx imagetools inspect "$GHCR_IMAGE:$image_tag" | awk '$1 == "Digest:" { print $2; exit }')
+          test -n "$digest"
+          tags=(--tag "$DOCKERHUB_IMAGE:$image_tag")
+          case "$VERSION" in
+            *-*) ;;
+            *) tags+=(--tag "$DOCKERHUB_IMAGE:latest") ;;
+          esac
+          docker buildx imagetools create "${tags[@]}" "$GHCR_IMAGE@$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Attest image digest
         if: github.event_name == 'push'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -281,16 +304,19 @@ jobs:
       - name: Verify digest and exact platform index
         env:
           COMMIT: ${{ needs.preflight.outputs.commit }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.build.outputs.digest || steps.reconcile.outputs.digest }}
+          VERSION: ${{ needs.preflight.outputs.version }}
           DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
           GHCR_IMAGE: ${{ needs.preflight.outputs.image }}
-          PUBLISH_GHCR: ${{ github.event_name == 'push' }}
         run: |
-          images=("$DOCKERHUB_IMAGE")
-          if test "$PUBLISH_GHCR" = true; then
-            images+=("$GHCR_IMAGE")
-          fi
+          image_tag=${VERSION#v}
+          images=("$DOCKERHUB_IMAGE" "$GHCR_IMAGE")
           for image in "${images[@]}"; do
+            test "$(docker buildx imagetools inspect "$image:$image_tag" | awk '$1 == "Digest:" { print $2; exit }')" = "$DIGEST"
+            case "$VERSION" in
+              *-*) ;;
+              *) test "$(docker buildx imagetools inspect "$image:latest" | awk '$1 == "Digest:" { print $2; exit }')" = "$DIGEST" ;;
+            esac
             reference="$image@$DIGEST"
             docker buildx imagetools inspect "$reference" --raw > manifest.json
             jq -e '
@@ -317,7 +343,7 @@ jobs:
         run: |
           test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
           ready=false
-          for attempt in $(seq 1 120); do
+          for _ in $(seq 1 120); do
             gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
             if test "$(wc -l < release-assets.txt)" -eq 31 \
               && grep -Fx checksums.txt release-assets.txt \
