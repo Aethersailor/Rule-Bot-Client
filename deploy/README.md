@@ -10,7 +10,9 @@
 
 | 路径 | 用途 |
 | --- | --- |
-| [`docker/config.json`](docker/config.json) | 与顶层 [`compose.yaml`](../compose.yaml) 配套的容器配置示例 |
+| [`docker/compose.yaml`](docker/compose.yaml) | Docker Compose 部署示例 |
+| [`docker/config.json`](docker/config.json) | 与 [`docker/compose.yaml`](docker/compose.yaml) 配套的容器配置示例 |
+| [`linux/config.json`](linux/config.json) | Linux 原生压缩包使用的配置示例；打包后命名为 `config.example.json` |
 | [`systemd/config.json`](systemd/config.json) | Debian 或其他 systemd 系统的配置示例 |
 | [`systemd/rule-bot-client.service`](systemd/rule-bot-client.service) | 让 Rule-Bot Client 作为 systemd 后台服务运行的配置 |
 | [`systemd/rule-bot-client-update.service`](systemd/rule-bot-client-update.service) | 从最新稳定版 Release 安装 Linux 更新的一次性服务 |

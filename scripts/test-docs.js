@@ -206,15 +206,16 @@ function assertBackupExamples(relativePath, analysis) {
 }
 
 function assertDesignCredentialContract() {
-	const design = read('DESIGN.md');
+	const designPath = 'docs/design-contract.md';
+	const design = read(designPath);
 	requireMatch(design,
 		/Inline `secret` and `token` values are the default for ordinary deployments/i,
-		'DESIGN.md: inline secret and token must be the ordinary-user default');
+		`${designPath}: inline secret and token must be the ordinary-user default`);
 	requireMatch(design,
 		/`secret_file`, `token_file`, `secret_env`, and `token_env` remain advanced[\s\S]*Each credential accepts exactly one source;[\s\S]*conflicts are rejected instead of resolved by precedence/i,
-		'DESIGN.md: file and environment credentials must remain advanced, mutually exclusive sources');
+		`${designPath}: file and environment credentials must remain advanced, mutually exclusive sources`);
 	if (/Inline secrets are supported for compatibility[\s\S]{0,120}(?:files?|environment variables?) are preferred/i.test(design))
-		fail('DESIGN.md: stale file/environment-preferred credential guidance remains');
+		fail(`${designPath}: stale file/environment-preferred credential guidance remains`);
 }
 
 function assertReleaseExampleContract() {
@@ -223,7 +224,7 @@ function assertReleaseExampleContract() {
 	if (!archiveFunction) {
 		fail('scripts/build-release.sh: build_archive function is missing');
 	} else {
-		requireMatch(archiveFunction[1], /\bcp\b[^\n]*\bconfig\.example\.json\b[^\n]*"\$root\/"/,
+		requireMatch(archiveFunction[1], /\bcp\s+deploy\/linux\/config\.json\s+"\$root\/config\.example\.json"/,
 			'scripts/build-release.sh: every Linux archive must include config.example.json');
 		requireMatch(archiveFunction[1], /chmod\s+0600\s+"\$root\/config\.example\.json"/,
 			'scripts/build-release.sh: archived config.example.json must use mode 0600');
@@ -277,7 +278,8 @@ function assertDeploymentContracts() {
 	const updateService = read('deploy/systemd/rule-bot-client-update.service');
 	const updateTimer = read('deploy/systemd/rule-bot-client-update.timer');
 	const dockerfile = read('Dockerfile');
-	const compose = read('compose.yaml');
+	const composePath = 'deploy/docker/compose.yaml';
+	const compose = read(composePath);
 
 	requireMatch(packageScript, /^\/etc\/rule-bot-client\/config\.json$/m,
 		'scripts/package-deb.sh: config.json must remain a dpkg conffile');
@@ -299,19 +301,19 @@ function assertDeploymentContracts() {
 	requireMatch(dockerfile, /^USER\s+10001:10001$/m,
 		'Dockerfile: runtime image must use UID/GID 10001:10001');
 	requireMatch(compose, /^\s*user:\s*["']?10001:10001["']?\s*$/m,
-		'compose.yaml: service must run as UID/GID 10001:10001');
+		`${composePath}: service must run as UID/GID 10001:10001`);
 	requireMatch(compose, /^\s*-\s+\/opt\/rule-bot-client:\/data\s*$/m,
-		'compose.yaml: expected the documented /opt/rule-bot-client:/data bind mount');
+		`${composePath}: expected the documented /opt/rule-bot-client:/data bind mount`);
 	requireMatch(compose, /^\s*read_only:\s*true\s*$/m,
-		'compose.yaml: container root filesystem must remain read-only');
+		`${composePath}: container root filesystem must remain read-only`);
 	requireMatch(compose, /^\s*network_mode:\s*host\s*$/m,
-		'compose.yaml: host networking is required for a loopback Mihomo controller');
+		`${composePath}: host networking is required for a loopback Mihomo controller`);
 
 }
 
 const bundledConfigs = [
-	'config.example.json',
 	'deploy/docker/config.json',
+	'deploy/linux/config.json',
 	'deploy/systemd/config.json',
 	'deploy/windows/config.json'
 ];
@@ -321,7 +323,8 @@ const markdownFiles = [
 	'README.md',
 	'PRIVACY.md',
 	'SECURITY.md',
-	'DESIGN.md',
+	'docs/design-contract.md',
+	'docs/telegram-announcement.md',
 	'deploy/README.md'
 ];
 const analyses = new Map(markdownFiles.map((relativePath) => [ relativePath, markdownAnalysis(relativePath) ]));

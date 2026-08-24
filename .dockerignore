@@ -11,6 +11,4 @@ scripts
 *.md
 LICENSE
 Makefile
-compose.yaml
-config.example.json
 **/*_test.go

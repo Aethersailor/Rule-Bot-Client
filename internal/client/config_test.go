@@ -53,8 +53,8 @@ func TestLoadConfigDefaultsAndRelativePaths(t *testing.T) {
 func TestBundledConfigurationsUseInlineCredentialsAndValidate(t *testing.T) {
 	repositoryRoot := filepath.Join("..", "..")
 	for _, relativePath := range []string{
-		"config.example.json",
 		filepath.Join("deploy", "docker", "config.json"),
+		filepath.Join("deploy", "linux", "config.json"),
 		filepath.Join("deploy", "systemd", "config.json"),
 	} {
 		t.Run(filepath.ToSlash(relativePath), func(t *testing.T) {

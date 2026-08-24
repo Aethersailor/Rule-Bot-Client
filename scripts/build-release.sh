@@ -34,7 +34,8 @@ build_archive() {
   mkdir -p "$root"
   TARGET_ARCH="$arch" TARGET_ARM="$arm" TARGET_MIPS="$mips" TARGET_LABEL="linux-$label" OUTPUT="$root/rule-bot-client" \
     sh scripts/build-one.sh
-  cp LICENSE README.md PRIVACY.md SECURITY.md config.example.json "$root/"
+  cp LICENSE README.md PRIVACY.md SECURITY.md "$root/"
+  cp deploy/linux/config.json "$root/config.example.json"
   mkdir -p "$root/systemd"
   cp deploy/systemd/rule-bot-client.service deploy/systemd/rule-bot-client-update.service deploy/systemd/rule-bot-client-update.timer "$root/systemd/"
   chmod 0755 "$root/rule-bot-client"
