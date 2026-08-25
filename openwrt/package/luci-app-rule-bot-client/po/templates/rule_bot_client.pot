@@ -217,7 +217,7 @@ msgstr ""
 msgid "External mount"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:91
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:95
 msgid "External storage"
 msgstr ""
 
@@ -345,7 +345,7 @@ msgstr ""
 msgid "Override configured; leave empty to preserve"
 msgstr ""
 
-#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/overview.js:78
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/overview.js:82
 msgid "Overview"
 msgstr ""
 
@@ -381,7 +381,7 @@ msgstr ""
 msgid "Persistent /etc/rule-bot-client/data"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:89
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:93
 msgid "Persistent storage"
 msgstr ""
 
@@ -401,11 +401,11 @@ msgstr ""
 msgid "Registrable domain"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:69
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:40
 msgid "Reload"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:71
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:41
 msgid "Restart"
 msgstr ""
 
@@ -425,7 +425,7 @@ msgstr ""
 msgid "Rolling back"
 msgstr ""
 
-#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:61 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:78 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:201 files/www/luci-static/resources/view/rule_bot_client/update.js:81
+#: files/usr/share/luci/menu.d/luci-app-rule-bot-client.json:1 files/www/luci-static/resources/view/rule_bot_client/backup.js:35 files/www/luci-static/resources/view/rule_bot_client/collection.js:61 files/www/luci-static/resources/view/rule_bot_client/diagnostics.js:12 files/www/luci-static/resources/view/rule_bot_client/overview.js:82 files/www/luci-static/resources/view/rule_bot_client/results.js:25 files/www/luci-static/resources/view/rule_bot_client/sources.js:201 files/www/luci-static/resources/view/rule_bot_client/update.js:81
 msgid "Rule-Bot Client"
 msgstr ""
 
@@ -477,15 +477,15 @@ msgstr ""
 msgid "Send existing domains"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:50
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:54
 msgid "Service disabled"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:50
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:54
 msgid "Service enabled"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/collection.js:62 files/www/luci-static/resources/view/rule_bot_client/overview.js:26 files/www/luci-static/resources/view/rule_bot_client/overview.js:61
+#: files/www/luci-static/resources/view/rule_bot_client/collection.js:62 files/www/luci-static/resources/view/rule_bot_client/overview.js:26 files/www/luci-static/resources/view/rule_bot_client/overview.js:65
 msgid "Service master switch"
 msgstr ""
 
@@ -529,7 +529,7 @@ msgstr ""
 msgid "Temporary /tmp/rule-bot-client/data"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/overview.js:90
+#: files/www/luci-static/resources/view/rule_bot_client/overview.js:94
 msgid "Temporary storage"
 msgstr ""
 
@@ -557,7 +557,7 @@ msgstr ""
 msgid "Token configured; leave empty to preserve"
 msgstr ""
 
-#: files/www/luci-static/resources/view/rule_bot_client/collection.js:62 files/www/luci-static/resources/view/rule_bot_client/overview.js:64
+#: files/www/luci-static/resources/view/rule_bot_client/collection.js:62 files/www/luci-static/resources/view/rule_bot_client/overview.js:68
 msgid "Turning this off saves the setting and stops the service. Turning it on validates the configuration and starts the service; the choice persists across reboot."
 msgstr ""
 

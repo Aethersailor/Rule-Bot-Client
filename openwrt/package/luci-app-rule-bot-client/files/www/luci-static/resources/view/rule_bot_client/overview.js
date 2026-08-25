@@ -37,7 +37,11 @@ function statusTable(status) {
 function serviceControls(status) {
 	const serviceEnabled = !status.config || status.config.enabled !== false;
 	const toggle = E('input', { type: 'checkbox', class: 'cbi-input-checkbox' });
+	const reload = E('button', { class: 'btn cbi-button-action', click: function() { return api.service('reload').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Reload'));
+	const restart = E('button', { class: 'btn cbi-button-positive', click: function() { return api.service('restart').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Restart'));
 	toggle.checked = serviceEnabled;
+	reload.disabled = !serviceEnabled;
+	restart.disabled = !serviceEnabled;
 	toggle.addEventListener('change', function() {
 		const nextEnabled = toggle.checked;
 		if (!status.config) {
@@ -66,9 +70,9 @@ function serviceControls(status) {
 			])
 		]),
 		E('div', { class: 'cbi-page-actions' }, [
-			E('button', { class: 'btn cbi-button-action', disabled: !serviceEnabled, click: function() { return api.service('reload').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Reload')),
+			reload,
 			' ',
-			E('button', { class: 'btn cbi-button-positive', disabled: !serviceEnabled, click: function() { return api.service('restart').then(function() { location.reload(); }).catch(api.notifyError); } }, _('Restart'))
+			restart
 		])
 	]);
 }

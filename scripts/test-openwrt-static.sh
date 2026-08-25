@@ -336,9 +336,10 @@ const poll = { add: () => {} };
 const ui = { addNotification: () => {} };
 let saved;
 let reloaded = false;
+const serviceActions = [];
 const api = {
   save: (settings) => { saved = settings; return Promise.resolve({ ok: true }); },
-  service: () => Promise.resolve({ ok: true }),
+  service: (action) => { serviceActions.push(action); return Promise.resolve({ ok: true }); },
   notifyError: (error) => { throw error; },
   detailNode: () => ({})
 };
@@ -378,6 +379,22 @@ function find(node, predicate) {
 const toggle = find(rendered, (node) => node.tag === 'input' && node.attributes.class === 'cbi-input-checkbox');
 if (!toggle || typeof toggle.listeners.change !== 'function' || toggle.checked !== true)
   throw new Error('overview service master switch was not rendered as enabled');
+const reload = find(rendered, (node) => node.tag === 'button' && node.children === 'Reload');
+const restart = find(rendered, (node) => node.tag === 'button' && node.children === 'Restart');
+if (!reload || !restart || reload.disabled !== false || restart.disabled !== false)
+  throw new Error('overview service buttons were not enabled with the service master switch');
+if ('disabled' in reload.attributes || 'disabled' in restart.attributes)
+  throw new Error('overview service buttons must not render a false disabled attribute');
+Promise.all([ reload.attributes.click(), restart.attributes.click() ]).then(() => {
+  if (serviceActions.join(',') !== 'reload,restart')
+    throw new Error(`overview service actions = ${serviceActions.join(',')}`);
+}).catch((error) => { console.error(error); process.exitCode = 1; });
+const disabledStatus = Object.assign({}, status, { config: Object.assign({}, status.config, { enabled: false }) });
+const disabledRendered = module.render(disabledStatus);
+const disabledReload = find(disabledRendered, (node) => node.tag === 'button' && node.children === 'Reload');
+const disabledRestart = find(disabledRendered, (node) => node.tag === 'button' && node.children === 'Restart');
+if (!disabledReload || !disabledRestart || disabledReload.disabled !== true || disabledRestart.disabled !== true)
+  throw new Error('overview service buttons were not disabled with the service master switch');
 toggle.checked = false;
 Promise.resolve(toggle.listeners.change()).then(() => {
   if (!saved || saved.enabled !== false)
