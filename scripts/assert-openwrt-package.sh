@@ -54,9 +54,11 @@ case "$manager" in
     grep -Fx "Architecture: $expected_arch" "$work/control/control"
     sed -n 's/^Depends:[[:space:]]*//p' "$work/control/control" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]].*$//' > "$work/dependencies"
     tar -tf "$data" | sed 's#^\./##; s#/$##' > "$work/paths"
-    postinst="$work/control/postinst"
+    sh -n "$work/control/postinst"
+    sh -n "$work/control/prerm"
+    postinst="$work/control/postinst-pkg"
     postupgrade="$postinst"
-    prerm="$work/control/prerm"
+    prerm="$work/control/prerm-pkg"
     postrm="$work/control/postrm"
     ;;
   apk)
