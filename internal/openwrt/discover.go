@@ -298,5 +298,5 @@ func serviceRunning(root, name string) bool {
 	if _, err := os.Stat(initPath); err != nil {
 		return false
 	}
-	return exec.Command(initPath, "status").Run() == nil
+	return exec.Command(initPath, "running").Run() == nil
 }

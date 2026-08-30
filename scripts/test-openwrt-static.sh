@@ -50,6 +50,7 @@ grep -F 'procd_add_reload_trigger rule_bot_client openclash nikki' "$root/etc/in
 grep -F '/var/run/rule-bot-client/config.json' "$root/etc/init.d/rule-bot-client"
 grep -F 'procd_set_param user nobody' "$root/etc/init.d/rule-bot-client"
 grep -F 'procd_set_param group nogroup' "$root/etc/init.d/rule-bot-client"
+grep -F 'exec.Command(initPath, "running").Run() == nil' internal/openwrt/discover.go
 grep -F "update_auto >/dev/null 2>&1" openwrt/package/luci-app-rule-bot-client/Makefile
 # This is an intentional literal OpenWrt make variable reference.
 # shellcheck disable=SC2016
