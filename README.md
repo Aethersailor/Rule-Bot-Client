@@ -101,7 +101,7 @@ OpenWrt 软件包可以自动发现本机的 OpenClash 或 Nikki。其他部署�
 | 📦 Debian 或 Ubuntu | `.deb` 软件包 | 支持 `amd64`、`arm64` 和 `armhf`，作为系统服务运行 |
 | 🧰 不使用 Docker 的 Linux | 原生二进制 | 提供 AMD64、386、ARM、MIPS、MIPS64、RISC-V 等构建，需要自行管理服务 |
 | 🪟 Windows 10 或 11 | 便携压缩包 | 提供 AMD64 和 ARM64 构建，解压后编辑配置即可运行 |
-| 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 支持 OpenWrt 24.10 和 25.12 的四种常见架构，通过 OpenWrt Web 界面配置 |
+| 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 支持 OpenWrt 24.10、25.12 和 ImmortalWrt SNAPSHOT 的四种常见架构，通过 OpenWrt Web 界面配置 |
 
 当前没有 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 软件包，不要安装通用 Linux 压缩包。
 
@@ -121,6 +121,8 @@ Linux 版本没有 Web 管理页面，需要编辑 JSON 文本配置文件，并
 > OpenWrt 包由本项目通过 GitHub Releases 发布，不属于 OpenWrt 官方软件源。固件升级不能保证保留或自动重装该包。
 >
 > 如果新固件没有包含它，Rule-Bot Client 程序、后台服务和 LuCI 管理页面会消失。选择保留设置且保留清单完整时，配置和默认持久化数据可以继续保留；软件包丢失后仍需重新安装。详见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97#%E5%A4%87%E4%BB%BD%E4%B8%8E%E5%9B%BA%E4%BB%B6%E5%8D%87%E7%BA%A7)。
+>
+> 不要在 LuCI「软件包」页面直接上传 APK。第三方 Release APK 不受固件的软件源签名密钥信任，直接上传会被 `UNTRUSTED signature` 拒绝。下面的安装脚本会先校验 Release 清单、文件大小和 SHA-256，再仅对已校验的本地 APK 使用 `--allow-untrusted`。
 
 软件包安装后会启用后台服务并尝试启动。默认设置会自动发现 OpenClash，并且只在本地保存域名；Rule-Bot 发送功能默认关闭。运行安装命令前，需要确认允许在这台路由器上收集域名。
 
@@ -133,7 +135,7 @@ cat /tmp/install-rule-bot-client-openwrt.sh
 sh /tmp/install-rule-bot-client-openwrt.sh
 ```
 
-脚本会识别 OpenWrt 版本、软件包格式和设备架构，并在安装前校验下载文件。
+脚本会识别 OpenWrt/ImmortalWrt、软件包格式和设备架构，并在安装前校验下载文件。ImmortalWrt SNAPSHOT 使用经过哈希校验的 OpenWrt 25.12 APK 兼容构建，最终依赖关系仍由设备上的 `apk` 校验。
 
 安装完成后，打开「服务 → Rule-Bot Client」。首次连接和验证步骤见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)。
 

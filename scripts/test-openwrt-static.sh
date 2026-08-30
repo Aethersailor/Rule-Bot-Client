@@ -18,6 +18,7 @@ test -f openwrt/package/luci-app-rule-bot-client/po/templates/rule_bot_client.po
 test -f scripts/install-openwrt.sh
 test -f scripts/prepare-openwrt-release.sh
 grep -F 'PKG_BUILD_DEPENDS:=luci-base/host' openwrt/package/luci-app-rule-bot-client/Makefile
+grep -F 'DEPENDS:=+ca-bundle +rpcd +rpcd-mod-ucode +ucode +ucode-mod-fs +luci-base' openwrt/package/luci-app-rule-bot-client/Makefile
 # These are intentional literal build-variable references.
 # shellcheck disable=SC2016
 grep -F 'PKG_VERSION:=$(if $(RULE_BOT_CLIENT_VERSION),$(RULE_BOT_CLIENT_VERSION),0.1.0)' openwrt/package/luci-app-rule-bot-client/Makefile
@@ -50,6 +51,20 @@ grep -F '/var/run/rule-bot-client/config.json' "$root/etc/init.d/rule-bot-client
 grep -F 'procd_set_param user nobody' "$root/etc/init.d/rule-bot-client"
 grep -F 'procd_set_param group nogroup' "$root/etc/init.d/rule-bot-client"
 grep -F "update_auto >/dev/null 2>&1" openwrt/package/luci-app-rule-bot-client/Makefile
+# This is an intentional literal OpenWrt make variable reference.
+# shellcheck disable=SC2016
+grep -F 'initialize_output=$$(/usr/libexec/rule-bot-client-openwrt initialize 2>&1)' openwrt/package/luci-app-rule-bot-client/Makefile
+grep -F 'configuration initialization failed; the package was installed with its service stopped' openwrt/package/luci-app-rule-bot-client/Makefile
+test "$(grep -Fc '/etc/init.d/rpcd reload >/dev/null 2>&1 || true' openwrt/package/luci-app-rule-bot-client/Makefile)" -eq 2
+grep -F 'define Package/luci-app-rule-bot-client/postrm' openwrt/package/luci-app-rule-bot-client/Makefile
+if grep -F '/etc/init.d/rpcd restart' openwrt/package/luci-app-rule-bot-client/Makefile; then
+  echo 'package lifecycle must not restart rpcd from inside an rpcd install request' >&2
+  exit 1
+fi
+if grep -F 'initialize >/dev/null 2>&1 || exit 1' openwrt/package/luci-app-rule-bot-client/Makefile; then
+  echo 'package lifecycle must preserve initialization diagnostics' >&2
+  exit 1
+fi
 grep -F "return { 'luci.rule_bot_client': methods };" "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const allowed_actions = {' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"
 grep -F 'const process = popen(' "$root/usr/share/rpcd/ucode/luci.rule_bot_client"

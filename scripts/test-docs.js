@@ -270,6 +270,12 @@ function assertVisitorDeploymentGuidance() {
 	requireMatch(readme,
 		/OpenWrt 包[\s\S]{0,120}不属于 OpenWrt 官方软件源[\s\S]{0,300}软件包丢失后仍需重新安装/,
 		'README.md: visitors must see the OpenWrt package retention warning before choosing that deployment');
+	requireMatch(readme,
+		/不要在 LuCI「软件包」页面直接上传 APK[\s\S]{0,180}`UNTRUSTED signature`[\s\S]{0,300}SHA-256/,
+		'README.md: visitors must use the hash-verifying installer instead of direct unsigned APK upload');
+	requireMatch(readme,
+		/ImmortalWrt SNAPSHOT[\s\S]{0,220}OpenWrt 25\.12 APK 兼容构建[\s\S]{0,120}`apk` 校验/,
+		'README.md: ImmortalWrt SNAPSHOT compatibility and dependency validation must be explicit');
 }
 
 function assertDeploymentContracts() {

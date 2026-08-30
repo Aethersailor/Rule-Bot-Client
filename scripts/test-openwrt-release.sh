@@ -90,6 +90,36 @@ PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-insta
 	sh "$output/install-rule-bot-client-openwrt.sh"
 test -s "$work/apk-installed"
 
+immortalwrt_snapshot="$work/immortalwrt-snapshot-release"
+printf '%s\n' \
+	"DISTRIB_ID='ImmortalWrt'" \
+	"DISTRIB_RELEASE='SNAPSHOT'" \
+	> "$immortalwrt_snapshot"
+rm -f "$work/apk-installed"
+PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_RELEASE_FILE="$immortalwrt_snapshot" \
+	sh "$output/install-rule-bot-client-openwrt.sh" \
+	>"$work/immortalwrt-snapshot.out" 2>"$work/immortalwrt-snapshot.err"
+test -s "$work/apk-installed"
+grep -F 'ImmortalWrt SNAPSHOT detected; installing the hash-verified OpenWrt 25.12.0 APK compatibility build.' \
+	"$work/immortalwrt-snapshot.err"
+
+openwrt_snapshot="$work/openwrt-snapshot-release"
+printf '%s\n' \
+	"DISTRIB_ID='OpenWrt'" \
+	"DISTRIB_RELEASE='SNAPSHOT'" \
+	> "$openwrt_snapshot"
+rm -f "$work/apk-installed"
+if PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_RELEASE_FILE="$openwrt_snapshot" \
+	sh "$output/install-rule-bot-client-openwrt.sh" \
+	>"$work/openwrt-snapshot.out" 2>"$work/openwrt-snapshot.err"; then
+	echo 'installer accepted an unsupported OpenWrt SNAPSHOT package' >&2
+	exit 1
+fi
+grep -F 'built for OpenWrt 25.12.0, but OpenWrt reports SNAPSHOT' "$work/openwrt-snapshot.err"
+test ! -e "$work/apk-installed"
+
 mock_bin="$work/mock-opkg"
 mkdir -p "$mock_bin"
 cp "$work/mock-apk/uclient-fetch" "$mock_bin/uclient-fetch"

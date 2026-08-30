@@ -98,15 +98,24 @@ case "$sdk_url" in
 	https://downloads.openwrt.org/releases/*) ;;
 	*) echo "Unexpected SDK identity: $sdk_url" >&2; exit 1 ;;
 esac
-if [ -r /etc/openwrt_release ]; then
-	detected_release=$(sed -n "s/^DISTRIB_RELEASE=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" /etc/openwrt_release | head -n 1)
+release_file=${RULE_BOT_CLIENT_TEST_RELEASE_FILE:-/etc/openwrt_release}
+if [ -r "$release_file" ]; then
+	detected_distribution=$(sed -n "s/^DISTRIB_ID=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" | head -n 1)
+	detected_release=$(sed -n "s/^DISTRIB_RELEASE=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" | head -n 1)
 	sdk_release=$(printf '%s\n' "$sdk_url" | sed -n 's#^https://downloads\.openwrt\.org/releases/\([^/]*\)/.*#\1#p')
-	detected_series=$(printf '%s\n' "$detected_release" | cut -d. -f1,2)
-	sdk_series=$(printf '%s\n' "$sdk_release" | cut -d. -f1,2)
-	if [ -z "$detected_series" ] || [ "$detected_series" != "$sdk_series" ]; then
-		echo "This package was built for OpenWrt $sdk_release, but this device reports $detected_release." >&2
-		exit 1
-	fi
+	case "$detected_distribution:$detected_release:$manager" in
+		ImmortalWrt:SNAPSHOT:apk)
+			echo "ImmortalWrt SNAPSHOT detected; installing the hash-verified OpenWrt $sdk_release APK compatibility build." >&2
+			;;
+		*)
+			detected_series=$(printf '%s\n' "$detected_release" | cut -d. -f1,2)
+			sdk_series=$(printf '%s\n' "$sdk_release" | cut -d. -f1,2)
+			if [ -z "$detected_series" ] || [ "$detected_series" != "$sdk_series" ]; then
+				echo "This package was built for OpenWrt $sdk_release, but $detected_distribution reports $detected_release." >&2
+				exit 1
+			fi
+			;;
+	esac
 fi
 
 package="$work/$asset"

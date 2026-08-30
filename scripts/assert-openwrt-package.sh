@@ -31,6 +31,7 @@ www/luci-static/resources/view/rule_bot_client/update.js
 www/luci-static/resources/view/rule_bot_client/diagnostics.js'
 required_dependencies='ca-bundle
 rpcd
+rpcd-mod-ucode
 ucode
 ucode-mod-fs
 luci-base'
@@ -53,6 +54,10 @@ case "$manager" in
     grep -Fx "Architecture: $expected_arch" "$work/control/control"
     sed -n 's/^Depends:[[:space:]]*//p' "$work/control/control" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]].*$//' > "$work/dependencies"
     tar -tf "$data" | sed 's#^\./##; s#/$##' > "$work/paths"
+    postinst="$work/control/postinst"
+    postupgrade="$postinst"
+    prerm="$work/control/prerm"
+    postrm="$work/control/postrm"
     ;;
   apk)
     : "${APK_TOOL:?APK_TOOL is required for APK v3 inspection}"
@@ -60,12 +65,44 @@ case "$manager" in
     jq -e --arg arch "$expected_arch" '.info.name == "luci-app-rule-bot-client" and .info.arch == $arch' "$work/apk.json" >/dev/null
     jq -r '.info.depends[]?' "$work/apk.json" > "$work/dependencies"
     jq -r '.paths[] | select(.name != null) | .name as $directory | .files[]? | $directory + "/" + .name' "$work/apk.json" > "$work/paths"
+    postinst="$work/post-install"
+    postupgrade="$work/post-upgrade"
+    prerm="$work/pre-deinstall"
+    postrm="$work/post-deinstall"
+    jq -er '.scripts["post-install"]' "$work/apk.json" > "$postinst"
+    jq -er '.scripts["post-upgrade"]' "$work/apk.json" > "$postupgrade"
+    jq -er '.scripts["pre-deinstall"]' "$work/apk.json" > "$prerm"
+    jq -er '.scripts["post-deinstall"]' "$work/apk.json" > "$postrm"
     ;;
   *)
     echo "unknown package manager: $manager" >&2
     exit 2
     ;;
 esac
+
+for script in "$postinst" "$postupgrade" "$prerm" "$postrm"; do
+  test -s "$script"
+  sh -n "$script"
+done
+
+for script in "$postinst" "$postupgrade"; do
+  grep -F 'Rule-Bot Client configuration initialization failed; the package was installed with its service stopped:' "$script"
+  grep -F '/bin/sleep 1' "$script"
+  grep -F '/etc/init.d/rpcd reload' "$script"
+  if grep -F '/etc/init.d/rpcd restart' "$script"; then
+    echo 'package install scripts must not restart rpcd synchronously' >&2
+    exit 1
+  fi
+  if grep -F 'initialize >/dev/null 2>&1 || exit 1' "$script"; then
+    echo 'package install scripts must preserve initialization diagnostics' >&2
+    exit 1
+  fi
+done
+
+grep -F '/etc/init.d/rule-bot-client stop' "$prerm"
+grep -F '/etc/init.d/rule-bot-client disable' "$prerm"
+grep -F '/bin/sleep 1' "$postrm"
+grep -F '/etc/init.d/rpcd reload' "$postrm"
 
 printf '%s\n' "$required_dependencies" | while IFS= read -r dependency; do
   grep -Fx "$dependency" "$work/dependencies" >/dev/null || {

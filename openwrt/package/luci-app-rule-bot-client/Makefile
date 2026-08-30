@@ -15,7 +15,7 @@ define Package/luci-app-rule-bot-client
   SUBMENU:=Web Servers/Proxies
   TITLE:=Multi-controller Mihomo MATCH collector with LuCI
   URL:=https://github.com/Aethersailor/Rule-Bot-Client
-  DEPENDS:=+ca-bundle +rpcd +ucode +ucode-mod-fs +luci-base
+  DEPENDS:=+ca-bundle +rpcd +rpcd-mod-ucode +ucode +ucode-mod-fs +luci-base
 endef
 
 define Package/luci-app-rule-bot-client/description
@@ -75,12 +75,25 @@ define Package/luci-app-rule-bot-client/postinst
 /bin/touch /etc/crontabs/root
 cron_line='17 4 * * * /usr/libexec/rule-bot-client-openwrt update_auto >/dev/null 2>&1'
 /bin/grep -Fqx "$${cron_line}" /etc/crontabs/root || /usr/bin/printf '%s\n' "$${cron_line}" >> /etc/crontabs/root
-/usr/libexec/rule-bot-client-openwrt initialize >/dev/null 2>&1 || exit 1
+initialize_output=$$(/usr/libexec/rule-bot-client-openwrt initialize 2>&1)
+initialize_status=$$?
+if [ "$${initialize_status}" -ne 0 ]; then
+	/usr/bin/printf '%s\n' \
+		'Rule-Bot Client configuration initialization failed; the package was installed with its service stopped:' \
+		"$${initialize_output}" >&2
+fi
 /etc/init.d/rule-bot-client enable >/dev/null 2>&1 || true
-/etc/init.d/rpcd restart >/dev/null 2>&1 || true
-/etc/init.d/uhttpd reload >/dev/null 2>&1 || true
-/etc/init.d/rule-bot-client restart >/dev/null 2>&1 || true
+if [ "$${initialize_status}" -eq 0 ]; then
+	/etc/init.d/rule-bot-client restart >/dev/null 2>&1 || true
+else
+	/etc/init.d/rule-bot-client stop >/dev/null 2>&1 || true
+fi
 /etc/init.d/cron restart >/dev/null 2>&1 || true
+(
+	/bin/sleep 1
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+) >/dev/null 2>&1 &
 exit 0
 endef
 
@@ -97,6 +110,17 @@ fi
 /etc/init.d/rule-bot-client stop >/dev/null 2>&1 || true
 /etc/init.d/rule-bot-client disable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
+exit 0
+endef
+
+define Package/luci-app-rule-bot-client/postrm
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+(
+	/bin/sleep 1
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd reload >/dev/null 2>&1 || true
+) >/dev/null 2>&1 &
 exit 0
 endef
 
