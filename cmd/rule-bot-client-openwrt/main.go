@@ -36,7 +36,7 @@ func run() int {
 	if testing {
 		root = os.Getenv("RULE_BOT_CLIENT_ROOT")
 	}
-	payload, err := readPayload(root)
+	payload, err := readPayload(root, os.Args, os.Stdin)
 	if err != nil {
 		writeResult(nil, err)
 		return 2
@@ -51,14 +51,17 @@ func run() int {
 	return 0
 }
 
-func readPayload(root string) ([]byte, error) {
-	var reader io.Reader = os.Stdin
+func readPayload(root string, args []string, stdin io.Reader) ([]byte, error) {
+	if len(args) == 2 && !actionRequiresPayload(args[1]) {
+		return nil, nil
+	}
+	var reader io.Reader = stdin
 	var requestPath string
-	if len(os.Args) == 3 {
-		if !requestIDPattern.MatchString(os.Args[2]) {
+	if len(args) == 3 {
+		if !requestIDPattern.MatchString(args[2]) {
 			return nil, errors.New("invalid request ID")
 		}
-		requestPath = rootedForCLI(root, "/var/run/rule-bot-client/rpc/"+os.Args[2]+".json")
+		requestPath = rootedForCLI(root, "/var/run/rule-bot-client/rpc/"+args[2]+".json")
 		file, err := os.Open(requestPath)
 		if err != nil {
 			return nil, errors.New("request payload is unavailable")
@@ -75,6 +78,15 @@ func readPayload(root string) ([]byte, error) {
 		return nil, errors.New("request payload exceeds 4 MiB")
 	}
 	return data, nil
+}
+
+func actionRequiresPayload(action string) bool {
+	switch action {
+	case "save", "probe", "domains", "clear", "service", "restore", "update_config":
+		return true
+	default:
+		return false
+	}
 }
 
 func rootedForCLI(root, path string) string {
