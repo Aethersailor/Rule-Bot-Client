@@ -76,6 +76,10 @@ printf '%s\n' \
 	'url=$3' \
 	'cp "$FIXTURE_RELEASE/${url##*/}" "$destination"' \
 	> "$mock_bin/uclient-fetch"
+printf '%s\n' \
+	'#!/bin/sh' \
+	'exit 42' \
+	> "$mock_bin/wget"
 # shellcheck disable=SC2016
 printf '%s\n' \
 	'#!/bin/sh' \
@@ -84,7 +88,7 @@ printf '%s\n' \
 	'test "$1:$2" = add:--allow-untrusted' \
 	'printf "%s\n" "$3" > "$INSTALL_MARKER"' \
 	> "$mock_bin/apk"
-chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/apk"
+chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/wget" "$mock_bin/apk"
 
 x86_apk_arch="$work/apk-arch-x86_64"
 printf '%s\n' x86_64 noarch > "$x86_apk_arch"
@@ -94,13 +98,17 @@ PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-insta
 test -s "$work/apk-installed"
 grep -F '_x86_64.apk' "$work/apk-installed"
 
-fallback_bin="$work/mock-apk-fallback"
-mkdir -p "$fallback_bin"
-cp "$mock_bin/apk" "$fallback_bin/apk"
+preferred_wget_bin="$work/mock-apk-preferred-wget"
+mkdir -p "$preferred_wget_bin"
+cp "$mock_bin/apk" "$preferred_wget_bin/apk"
+# The single-quoted strings intentionally become a separate mock shell script.
+# shellcheck disable=SC2016
 printf '%s\n' \
 	'#!/bin/sh' \
+	'set -eu' \
+	': > "$UCLIENT_CALLED"' \
 	'exit 41' \
-	> "$fallback_bin/uclient-fetch"
+	> "$preferred_wget_bin/uclient-fetch"
 # The single-quoted strings intentionally become a separate mock shell script.
 # shellcheck disable=SC2016
 printf '%s\n' \
@@ -108,15 +116,16 @@ printf '%s\n' \
 	'set -eu' \
 	'test "$1" = -O' \
 	'cp "$FIXTURE_RELEASE/${3##*/}" "$2"' \
-	> "$fallback_bin/wget"
-chmod 0755 "$fallback_bin/uclient-fetch" "$fallback_bin/wget" "$fallback_bin/apk"
+	> "$preferred_wget_bin/wget"
+chmod 0755 "$preferred_wget_bin/uclient-fetch" "$preferred_wget_bin/wget" "$preferred_wget_bin/apk"
 rm -f "$work/apk-installed"
-PATH="$fallback_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+PATH="$preferred_wget_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	UCLIENT_CALLED="$work/uclient-called" \
 	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$x86_apk_arch" \
 	sh "$output/install-rule-bot-client-openwrt.sh" \
-	> "$work/apk-fallback.out" 2> "$work/apk-fallback.err"
+	> "$work/apk-preferred-wget.out" 2> "$work/apk-preferred-wget.err"
 test -s "$work/apk-installed"
-grep -F 'uclient-fetch failed; trying wget.' "$work/apk-fallback.err"
+test ! -e "$work/uclient-called"
 grep -F '_x86_64.apk' "$work/apk-installed"
 
 aarch64_apk_arch="$work/apk-arch-aarch64"

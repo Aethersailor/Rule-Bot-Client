@@ -23,14 +23,14 @@ fetch() {
 		https://*) ;;
 		*) echo "Refusing non-HTTPS URL: $url" >&2; exit 1 ;;
 	esac
-	if command -v uclient-fetch >/dev/null 2>&1; then
-		if uclient-fetch -O "$destination" "$url"; then
+	if command -v wget >/dev/null 2>&1; then
+		if wget -O "$destination" "$url"; then
 			return 0
 		fi
-		echo 'uclient-fetch failed; trying wget.' >&2
+		echo 'wget failed; trying uclient-fetch.' >&2
 	fi
-	if command -v wget >/dev/null 2>&1; then
-		wget -O "$destination" "$url"
+	if command -v uclient-fetch >/dev/null 2>&1; then
+		uclient-fetch -O "$destination" "$url"
 		return 0
 	fi
 	echo 'Neither uclient-fetch nor wget is available.' >&2
