@@ -184,6 +184,7 @@ test ! -e "$work/apk-installed"
 mock_bin="$work/mock-opkg"
 mkdir -p "$mock_bin"
 cp "$work/mock-apk/uclient-fetch" "$mock_bin/uclient-fetch"
+cp "$work/mock-apk/wget" "$mock_bin/wget"
 # shellcheck disable=SC2016
 printf '%s\n' \
 	'#!/bin/sh' \
@@ -195,7 +196,7 @@ printf '%s\n' \
 	'test "$1" = install' \
 	'printf "%s\n" "$2" > "$INSTALL_MARKER"' \
 	> "$mock_bin/opkg"
-chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/opkg"
+chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/wget" "$mock_bin/opkg"
 
 PATH="$mock_bin:/usr/bin:/bin" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/opkg-installed" \
 	sh "$output/install-rule-bot-client-openwrt.sh"
@@ -223,13 +224,14 @@ test ! -e "$work/hash-install-called"
 mock_bin="$work/mock-unsupported"
 mkdir -p "$mock_bin"
 cp "$work/mock-apk/uclient-fetch" "$mock_bin/uclient-fetch"
+cp "$work/mock-apk/wget" "$mock_bin/wget"
 # shellcheck disable=SC2016
 printf '%s\n' \
 	'#!/bin/sh' \
 	'set -eu' \
 	'exit 99' \
 	> "$mock_bin/apk"
-chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/apk"
+chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/wget" "$mock_bin/apk"
 riscv_apk_arch="$work/apk-arch-riscv64"
 printf '%s\n' riscv64 noarch > "$riscv_apk_arch"
 rm -f "$work/unsupported-install-called"
