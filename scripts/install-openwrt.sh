@@ -38,9 +38,37 @@ fetch "$base_url/openwrt-manifest.tsv" "$manifest"
 
 manager=
 architecture=
+release_file=${RULE_BOT_CLIENT_TEST_RELEASE_FILE:-/etc/openwrt_release}
 if command -v apk >/dev/null 2>&1; then
 	manager=apk
-	architecture=$(apk --print-arch)
+	accepted_architectures="$work/apk-architectures"
+	apk_arch_file=${RULE_BOT_CLIENT_TEST_APK_ARCH_FILE:-/etc/apk/arch}
+	if [ -r "$apk_arch_file" ]; then
+		cp "$apk_arch_file" "$accepted_architectures"
+	elif [ -r "$release_file" ]; then
+		sed -n "s/^DISTRIB_ARCH=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" > "$accepted_architectures"
+	else
+		: > "$accepted_architectures"
+	fi
+	architecture=$(awk -F '\t' '
+		FILENAME == ARGV[1] {
+			candidate = $1
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", candidate)
+			if (candidate ~ /^[0-9A-Za-z_+][-0-9A-Za-z_+]*$/ && !seen[candidate]++) {
+				accepted[++count] = candidate
+			}
+			next
+		}
+		$1 == "apk" { available[$2]++ }
+		END {
+			for (position = 1; position <= count; position++) {
+				if (available[accepted[position]] == 1) {
+					print accepted[position]
+					exit
+				}
+			}
+		}
+	' "$accepted_architectures" "$manifest")
 elif command -v opkg >/dev/null 2>&1; then
 	manager=ipk
 	opkg print-architecture > "$work/opkg-architectures"
@@ -98,7 +126,6 @@ case "$sdk_url" in
 	https://downloads.openwrt.org/releases/*) ;;
 	*) echo "Unexpected SDK identity: $sdk_url" >&2; exit 1 ;;
 esac
-release_file=${RULE_BOT_CLIENT_TEST_RELEASE_FILE:-/etc/openwrt_release}
 if [ -r "$release_file" ]; then
 	detected_distribution=$(sed -n "s/^DISTRIB_ID=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" | head -n 1)
 	detected_release=$(sed -n "s/^DISTRIB_RELEASE=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" | head -n 1)

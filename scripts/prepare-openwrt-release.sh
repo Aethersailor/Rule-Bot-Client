@@ -36,7 +36,7 @@ find "$artifact_root" -type f -name manifest.json -print | sort | while IFS= rea
 
 	[ "$head_sha" = "$commit" ] || { echo "artifact commit mismatch in $manifest" >&2; exit 1; }
 	case "$manager:$architecture" in
-		ipk:x86_64|ipk:aarch64_generic|ipk:mips_24kc|ipk:mipsel_24kc|apk:x86_64|apk:aarch64_generic|apk:mips_24kc|apk:mipsel_24kc) ;;
+		ipk:x86_64|ipk:aarch64_generic|ipk:aarch64_cortex-a53|ipk:mips_24kc|ipk:mipsel_24kc|apk:x86_64|apk:aarch64_generic|apk:aarch64_cortex-a53|apk:mips_24kc|apk:mipsel_24kc) ;;
 		*) echo "unexpected package identity $manager:$architecture" >&2; exit 1 ;;
 	esac
 	printf '%s' "$package_name" | grep -Eq '^luci-app-rule-bot-client[-_+.0-9A-Za-z]+\.(ipk|apk)$' || {
@@ -68,8 +68,8 @@ find "$artifact_root" -type f -name manifest.json -print | sort | while IFS= rea
 	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$manager" "$architecture" "$asset" "$package_sha256" "$package_size" "$sdk_url" >> "$entries"
 done
 
-[ "$(wc -l < "$entries" | tr -d ' ')" -eq 8 ] || { echo 'expected exactly eight OpenWrt package manifests' >&2; exit 1; }
-[ "$(cut -f1,2 "$entries" | sort -u | wc -l | tr -d ' ')" -eq 8 ] || { echo 'duplicate manager/architecture pair' >&2; exit 1; }
+[ "$(wc -l < "$entries" | tr -d ' ')" -eq 10 ] || { echo 'expected exactly ten OpenWrt package manifests' >&2; exit 1; }
+[ "$(cut -f1,2 "$entries" | sort -u | wc -l | tr -d ' ')" -eq 10 ] || { echo 'duplicate manager/architecture pair' >&2; exit 1; }
 
 {
 	printf 'format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n'
@@ -87,4 +87,4 @@ sed -e "s/@VERSION@/$version/g" -e "s#@REPOSITORY@#$repository#g" \
 	scripts/install-openwrt.sh > "$output/install-rule-bot-client-openwrt.sh"
 chmod 0755 "$output/install-rule-bot-client-openwrt.sh"
 
-test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 11
+test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 13

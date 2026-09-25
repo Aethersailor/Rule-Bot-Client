@@ -413,6 +413,7 @@ func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 
 	targetRoot := t.TempDir()
 	writeRootFile(t, targetRoot, "/usr/bin/apk", "")
+	writeRootFile(t, targetRoot, "/etc/apk/arch", "aarch64_cortex-a53\nnoarch\n")
 	writeRootFile(t, targetRoot, "/lib/upgrade/keep.d/rule-bot-client", `/etc/config/rule_bot_client
 /etc/rule-bot-client/credentials/
 /etc/rule-bot-client/certs/
@@ -456,7 +457,7 @@ func TestBackupRestoresAcrossPackageManagerChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info["package_manager"] != "apk" || info["complete"] != true {
+	if info["package_manager"] != "apk" || info["architecture"] != "aarch64_cortex-a53" || info["complete"] != true {
 		t.Fatalf("upgradeInfo = %#v", info)
 	}
 }
@@ -814,6 +815,37 @@ func TestUpdateManifestSelectsHighestPriorityArchitecture(t *testing.T) {
 	}
 	if selected.Architecture != "mipsel_24kc" {
 		t.Fatalf("selected architecture = %q", selected.Architecture)
+	}
+}
+
+func TestAPKArchitectureFileSelectsOpenWrtPackageArchitecture(t *testing.T) {
+	architectures := parseAPKArchitectures([]byte("aarch64_cortex-a53\nnoarch\naarch64_cortex-a53\ninvalid architecture\n"))
+	if diff := strings.Join(architectures, ","); diff != "aarch64_cortex-a53,noarch" {
+		t.Fatalf("architectures = %q", diff)
+	}
+	manifest := []byte("format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n" +
+		"apk\taarch64_generic\tluci-app-rule-bot-client-0.2.1-r1_aarch64_generic.apk\t" + strings.Repeat("a", 64) + "\t5000000\thttps://downloads.openwrt.org/releases/25.12.0/targets/armsr/armv8/sdk.tar.zst\n" +
+		"apk\taarch64_cortex-a53\tluci-app-rule-bot-client-0.2.1-r1_aarch64_cortex-a53.apk\t" + strings.Repeat("b", 64) + "\t5100000\thttps://downloads.openwrt.org/releases/25.12.0/targets/mediatek/filogic/sdk.tar.zst\n")
+	packages, err := parseUpdateManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := selectUpdatePackage(packages, updateEnvironment{
+		Manager: "apk", Format: "apk", Architectures: prioritizeArchitectures(architectures),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Architecture != "aarch64_cortex-a53" {
+		t.Fatalf("selected architecture = %q", selected.Architecture)
+	}
+}
+
+func TestOpenWrtReleasePackageArchitectureFallback(t *testing.T) {
+	root := t.TempDir()
+	writeRootFile(t, root, "/etc/openwrt_release", "DISTRIB_ID='ImmortalWrt'\nDISTRIB_RELEASE='25.12.2'\nDISTRIB_ARCH='aarch64_cortex-a53'\n")
+	if architecture := readOpenWrtReleaseValue(root, "DISTRIB_ARCH"); architecture != "aarch64_cortex-a53" {
+		t.Fatalf("package architecture = %q", architecture)
 	}
 }
 

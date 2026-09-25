@@ -101,7 +101,7 @@ OpenWrt 软件包可以自动发现本机的 OpenClash 或 Nikki。其他部署�
 | 📦 Debian 或 Ubuntu | `.deb` 软件包 | 支持 `amd64`、`arm64` 和 `armhf`，作为系统服务运行 |
 | 🧰 不使用 Docker 的 Linux | 原生二进制 | 提供 AMD64、386、ARM、MIPS、MIPS64、RISC-V 等构建，需要自行管理服务 |
 | 🪟 Windows 10 或 11 | 便携压缩包 | 提供 AMD64 和 ARM64 构建，解压后编辑配置即可运行 |
-| 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 支持 OpenWrt 24.10、25.12 和 ImmortalWrt SNAPSHOT 的四种常见架构，通过 OpenWrt Web 界面配置 |
+| 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 支持 OpenWrt 24.10、25.12 和 ImmortalWrt SNAPSHOT 的五种常见包架构，通过 OpenWrt Web 界面配置 |
 
 当前没有 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 软件包，不要安装通用 Linux 压缩包。
 

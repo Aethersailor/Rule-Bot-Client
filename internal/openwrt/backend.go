@@ -740,9 +740,10 @@ func (b Backend) upgradeInfo() (map[string]any, error) {
 	arch := ""
 	if _, err := os.Stat(rooted(b.Root, "/usr/bin/apk")); err == nil {
 		manager = "apk"
-		if b.Root == "" || b.Root == "/" {
-			output, _ := exec.Command("/usr/bin/apk", "--print-arch").Output()
-			arch = strings.TrimSpace(string(output))
+		if architectures, archErr := readAPKArchitectures(b.Root); archErr == nil {
+			arch = architectures[0]
+		} else {
+			arch = readOpenWrtReleaseValue(b.Root, "DISTRIB_ARCH")
 		}
 	} else if _, err := os.Stat(rooted(b.Root, "/bin/opkg")); err == nil {
 		manager = "opkg"

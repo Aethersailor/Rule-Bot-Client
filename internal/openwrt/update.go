@@ -272,20 +272,59 @@ func (b Backend) runUpdateCommand(ctx context.Context, name string, args ...stri
 	return output, nil
 }
 
+func parseAPKArchitectures(data []byte) []string {
+	architectures := []string{}
+	seen := map[string]struct{}{}
+	for _, line := range strings.Split(string(data), "\n") {
+		architecture := strings.TrimSpace(line)
+		if !updateArchitecturePattern.MatchString(architecture) {
+			continue
+		}
+		if _, exists := seen[architecture]; exists {
+			continue
+		}
+		seen[architecture] = struct{}{}
+		architectures = append(architectures, architecture)
+	}
+	return architectures
+}
+
+func readAPKArchitectures(root string) ([]string, error) {
+	data, err := os.ReadFile(rooted(root, "/etc/apk/arch"))
+	if err != nil {
+		return nil, err
+	}
+	architectures := parseAPKArchitectures(data)
+	if len(architectures) == 0 {
+		return nil, errors.New("apk architecture file contains no valid architectures")
+	}
+	return architectures, nil
+}
+
+func prioritizeArchitectures(architectures []string) map[string]int {
+	priorities := make(map[string]int, len(architectures))
+	for index, architecture := range architectures {
+		priorities[architecture] = len(architectures) - index
+	}
+	return priorities
+}
+
 func (b Backend) detectUpdateEnvironment(ctx context.Context) (updateEnvironment, error) {
 	if b.Root != "" && b.Root != "/" {
 		return updateEnvironment{}, errors.New("update detection is unavailable in an offline test root")
 	}
 	if _, err := os.Stat("/usr/bin/apk"); err == nil {
-		output, err := b.runUpdateCommand(ctx, "/usr/bin/apk", "--print-arch")
-		if err != nil {
-			return updateEnvironment{}, err
+		architectures, archErr := readAPKArchitectures("")
+		if errors.Is(archErr, os.ErrNotExist) {
+			architecture := readOpenWrtReleaseValue("", "DISTRIB_ARCH")
+			if !updateArchitecturePattern.MatchString(architecture) {
+				return updateEnvironment{}, errors.New("apk architecture file is missing and OpenWrt reports no valid package architecture")
+			}
+			architectures = []string{architecture}
+		} else if archErr != nil {
+			return updateEnvironment{}, archErr
 		}
-		architecture := strings.TrimSpace(string(output))
-		if !updateArchitecturePattern.MatchString(architecture) {
-			return updateEnvironment{}, errors.New("apk returned an invalid architecture")
-		}
-		return updateEnvironment{Manager: "apk", Format: "apk", Architectures: map[string]int{architecture: 1}}, nil
+		return updateEnvironment{Manager: "apk", Format: "apk", Architectures: prioritizeArchitectures(architectures)}, nil
 	}
 	if _, err := os.Stat("/bin/opkg"); err == nil {
 		output, err := b.runUpdateCommand(ctx, "/bin/opkg", "print-architecture")
@@ -311,18 +350,23 @@ func (b Backend) detectUpdateEnvironment(ctx context.Context) (updateEnvironment
 	return updateEnvironment{}, errors.New("neither apk nor opkg is available")
 }
 
-func readOpenWrtRelease(root string) string {
+func readOpenWrtReleaseValue(root, name string) string {
 	data, err := os.ReadFile(rooted(root, "/etc/openwrt_release"))
 	if err != nil {
 		return ""
 	}
+	prefix := name + "="
 	for _, line := range strings.Split(string(data), "\n") {
-		if !strings.HasPrefix(line, "DISTRIB_RELEASE=") {
+		if !strings.HasPrefix(line, prefix) {
 			continue
 		}
-		return strings.Trim(strings.TrimPrefix(line, "DISTRIB_RELEASE="), "'\"")
+		return strings.Trim(strings.TrimPrefix(line, prefix), "'\"")
 	}
 	return ""
+}
+
+func readOpenWrtRelease(root string) string {
+	return readOpenWrtReleaseValue(root, "DISTRIB_RELEASE")
 }
 
 func updateCompatibilityWarning(root, sdkURL string) (string, error) {

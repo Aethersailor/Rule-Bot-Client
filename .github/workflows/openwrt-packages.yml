@@ -89,6 +89,12 @@ jobs:
             goarch: arm64
           - manager: ipk
             release: 24.10.4
+            target: mediatek
+            subtarget: filogic
+            package_arch: aarch64_cortex-a53
+            goarch: arm64
+          - manager: ipk
+            release: 24.10.4
             target: ath79
             subtarget: generic
             package_arch: mips_24kc
@@ -112,6 +118,12 @@ jobs:
             target: armsr
             subtarget: armv8
             package_arch: aarch64_generic
+            goarch: arm64
+          - manager: apk
+            release: 25.12.0
+            target: mediatek
+            subtarget: filogic
+            package_arch: aarch64_cortex-a53
             goarch: arm64
           - manager: apk
             release: 25.12.0
@@ -279,7 +291,7 @@ jobs:
         run: |
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --pattern 'luci-app-rule-bot-client-*' --dir downloaded
-          test "$(find downloaded -type f -name manifest.json | wc -l)" -eq 8
+          test "$(find downloaded -type f -name manifest.json | wc -l)" -eq 10
 
       - name: Prepare collision-free release assets and installer
         run: |

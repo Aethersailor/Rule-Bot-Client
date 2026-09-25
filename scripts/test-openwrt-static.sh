@@ -4,9 +4,9 @@ set -eu
 root=openwrt/package/luci-app-rule-bot-client/files
 
 test -f openwrt/package/luci-app-rule-bot-client/Makefile
-test "$(grep -c '^[[:space:]]*- manager: ipk$' .github/workflows/openwrt-packages.yml)" -eq 4
-test "$(grep -c '^[[:space:]]*- manager: apk$' .github/workflows/openwrt-packages.yml)" -eq 4
-test "$(grep -c '^[[:space:]]*- manager:' .github/workflows/openwrt-packages.yml)" -eq 8
+test "$(grep -c '^[[:space:]]*- manager: ipk$' .github/workflows/openwrt-packages.yml)" -eq 5
+test "$(grep -c '^[[:space:]]*- manager: apk$' .github/workflows/openwrt-packages.yml)" -eq 5
+test "$(grep -c '^[[:space:]]*- manager:' .github/workflows/openwrt-packages.yml)" -eq 10
 test -x "$root/etc/init.d/rule-bot-client" || test -f "$root/etc/init.d/rule-bot-client"
 test -f "$root/etc/config/rule_bot_client"
 test -f "$root/lib/upgrade/keep.d/rule-bot-client"

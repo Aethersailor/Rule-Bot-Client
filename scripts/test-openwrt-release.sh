@@ -11,7 +11,7 @@ commit=0123456789abcdef0123456789abcdef01234567
 mkdir -p "$artifacts"
 
 for manager in ipk apk; do
-	for architecture in x86_64 aarch64_generic mips_24kc mipsel_24kc; do
+	for architecture in x86_64 aarch64_generic aarch64_cortex-a53 mips_24kc mipsel_24kc; do
 		directory="$artifacts/luci-app-rule-bot-client-${manager}-${architecture}"
 		mkdir -p "$directory"
 		if [ "$manager" = ipk ]; then
@@ -40,10 +40,10 @@ done
 GITHUB_REPOSITORY=Aethersailor/Rule-Bot-Client \
 	sh scripts/prepare-openwrt-release.sh v0.2.0 "$commit" "$artifacts" "$output"
 
-test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 11
-test "$(find "$output" -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 4
-test "$(find "$output" -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 4
-test "$(cut -f1,2 "$output/openwrt-manifest.tsv" | tail -n +2 | sort -u | wc -l)" -eq 8
+test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 13
+test "$(find "$output" -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 5
+test "$(find "$output" -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 5
+test "$(cut -f1,2 "$output/openwrt-manifest.tsv" | tail -n +2 | sort -u | wc -l)" -eq 10
 if grep -F '@VERSION@' "$output/install-rule-bot-client-openwrt.sh"; then
 	echo 'generated installer still contains the version placeholder' >&2
 	exit 1
@@ -80,15 +80,40 @@ printf '%s\n' \
 printf '%s\n' \
 	'#!/bin/sh' \
 	'set -eu' \
-	'if [ "$1" = --print-arch ]; then echo x86_64; exit 0; fi' \
+	'if [ "$1" = --print-arch ]; then echo "installer must not use apk --print-arch" >&2; exit 97; fi' \
 	'test "$1:$2" = add:--allow-untrusted' \
 	'printf "%s\n" "$3" > "$INSTALL_MARKER"' \
 	> "$mock_bin/apk"
 chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/apk"
 
+x86_apk_arch="$work/apk-arch-x86_64"
+printf '%s\n' x86_64 noarch > "$x86_apk_arch"
 PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$x86_apk_arch" \
 	sh "$output/install-rule-bot-client-openwrt.sh"
 test -s "$work/apk-installed"
+grep -F '_x86_64.apk' "$work/apk-installed"
+
+aarch64_apk_arch="$work/apk-arch-aarch64"
+printf '%s\n' aarch64_cortex-a53 noarch > "$aarch64_apk_arch"
+rm -f "$work/apk-installed"
+PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$aarch64_apk_arch" \
+	sh "$output/install-rule-bot-client-openwrt.sh"
+grep -F '_aarch64_cortex-a53.apk' "$work/apk-installed"
+
+aarch64_release="$work/openwrt-aarch64-release"
+printf '%s\n' \
+	"DISTRIB_ID='OpenWrt'" \
+	"DISTRIB_RELEASE='25.12.2'" \
+	"DISTRIB_ARCH='aarch64_cortex-a53'" \
+	> "$aarch64_release"
+rm -f "$work/apk-installed"
+PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$work/missing-apk-arch" \
+	RULE_BOT_CLIENT_TEST_RELEASE_FILE="$aarch64_release" \
+	sh "$output/install-rule-bot-client-openwrt.sh"
+grep -F '_aarch64_cortex-a53.apk' "$work/apk-installed"
 
 immortalwrt_snapshot="$work/immortalwrt-snapshot-release"
 printf '%s\n' \
@@ -97,6 +122,7 @@ printf '%s\n' \
 	> "$immortalwrt_snapshot"
 rm -f "$work/apk-installed"
 PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$x86_apk_arch" \
 	RULE_BOT_CLIENT_TEST_RELEASE_FILE="$immortalwrt_snapshot" \
 	sh "$output/install-rule-bot-client-openwrt.sh" \
 	>"$work/immortalwrt-snapshot.out" 2>"$work/immortalwrt-snapshot.err"
@@ -111,6 +137,7 @@ printf '%s\n' \
 	> "$openwrt_snapshot"
 rm -f "$work/apk-installed"
 if PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$x86_apk_arch" \
 	RULE_BOT_CLIENT_TEST_RELEASE_FILE="$openwrt_snapshot" \
 	sh "$output/install-rule-bot-client-openwrt.sh" \
 	>"$work/openwrt-snapshot.out" 2>"$work/openwrt-snapshot.err"; then
@@ -166,15 +193,17 @@ cp "$work/mock-apk/uclient-fetch" "$mock_bin/uclient-fetch"
 printf '%s\n' \
 	'#!/bin/sh' \
 	'set -eu' \
-	'if [ "$1" = --print-arch ]; then echo riscv64; exit 0; fi' \
 	'exit 99' \
 	> "$mock_bin/apk"
 chmod 0755 "$mock_bin/uclient-fetch" "$mock_bin/apk"
+riscv_apk_arch="$work/apk-arch-riscv64"
+printf '%s\n' riscv64 noarch > "$riscv_apk_arch"
 rm -f "$work/unsupported-install-called"
 if PATH="$mock_bin:/usr/bin:/bin" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/unsupported-install-called" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$riscv_apk_arch" \
 	sh "$output/install-rule-bot-client-openwrt.sh" >"$work/unsupported.out" 2>"$work/unsupported.err"; then
 	echo 'installer accepted an unsupported architecture' >&2
 	exit 1
 fi
-grep -F 'no unique package for manager=apk architecture=riscv64' "$work/unsupported.err"
+grep -F 'No supported Rule-Bot Client architecture was found for apk.' "$work/unsupported.err"
 test ! -e "$work/unsupported-install-called"

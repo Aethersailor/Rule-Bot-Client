@@ -345,14 +345,14 @@ jobs:
           ready=false
           for _ in $(seq 1 120); do
             gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
-            if test "$(wc -l < release-assets.txt)" -eq 31 \
+            if test "$(wc -l < release-assets.txt)" -eq 33 \
               && grep -Fx checksums.txt release-assets.txt \
               && grep -Fx client-update-manifest.json release-assets.txt \
               && grep -Fx openwrt-checksums.txt release-assets.txt \
               && grep -Fx openwrt-manifest.tsv release-assets.txt \
               && grep -Fx install-rule-bot-client-openwrt.sh release-assets.txt \
               && test "$(grep -Ec '^rule-bot-client_.*_windows_(amd64|arm64)\.zip$' release-assets.txt)" -eq 2 \
-              && test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq 8; then
+              && test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq 10; then
               ready=true
               break
             fi

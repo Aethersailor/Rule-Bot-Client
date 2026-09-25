@@ -21,7 +21,16 @@ trap cleanup EXIT
 if command -v apk >/dev/null 2>&1; then
 	manager=apk
 	extension=.apk
-	architecture=$(apk --print-arch)
+	apk_arch_file=${RULE_BOT_CLIENT_TEST_APK_ARCH_FILE:-/etc/apk/arch}
+	release_file=${RULE_BOT_CLIENT_TEST_RELEASE_FILE:-/etc/openwrt_release}
+	architecture=
+	if [ -r "$apk_arch_file" ]; then
+		architecture=$(grep -E '^[0-9A-Za-z_+][-0-9A-Za-z_+]*$' "$apk_arch_file" | head -n 1)
+	fi
+	if [ -z "$architecture" ] && [ -r "$release_file" ]; then
+		architecture=$(sed -n "s/^DISTRIB_ARCH=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" "$release_file" | head -n 1)
+	fi
+	[ -n "$architecture" ] || architecture=$(apk --print-arch)
 elif command -v opkg >/dev/null 2>&1; then
 	manager=opkg
 	extension=.ipk
