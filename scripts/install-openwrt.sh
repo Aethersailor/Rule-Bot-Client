@@ -24,13 +24,17 @@ fetch() {
 		*) echo "Refusing non-HTTPS URL: $url" >&2; exit 1 ;;
 	esac
 	if command -v uclient-fetch >/dev/null 2>&1; then
-		uclient-fetch -O "$destination" "$url"
-	elif command -v wget >/dev/null 2>&1; then
-		wget -O "$destination" "$url"
-	else
-		echo 'Neither uclient-fetch nor wget is available.' >&2
-		exit 1
+		if uclient-fetch -O "$destination" "$url"; then
+			return 0
+		fi
+		echo 'uclient-fetch failed; trying wget.' >&2
 	fi
+	if command -v wget >/dev/null 2>&1; then
+		wget -O "$destination" "$url"
+		return 0
+	fi
+	echo 'Neither uclient-fetch nor wget is available.' >&2
+	exit 1
 }
 
 manifest="$work/openwrt-manifest.tsv"

@@ -94,6 +94,31 @@ PATH="$mock_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-insta
 test -s "$work/apk-installed"
 grep -F '_x86_64.apk' "$work/apk-installed"
 
+fallback_bin="$work/mock-apk-fallback"
+mkdir -p "$fallback_bin"
+cp "$mock_bin/apk" "$fallback_bin/apk"
+printf '%s\n' \
+	'#!/bin/sh' \
+	'exit 41' \
+	> "$fallback_bin/uclient-fetch"
+# The single-quoted strings intentionally become a separate mock shell script.
+# shellcheck disable=SC2016
+printf '%s\n' \
+	'#!/bin/sh' \
+	'set -eu' \
+	'test "$1" = -O' \
+	'cp "$FIXTURE_RELEASE/${3##*/}" "$2"' \
+	> "$fallback_bin/wget"
+chmod 0755 "$fallback_bin/uclient-fetch" "$fallback_bin/wget" "$fallback_bin/apk"
+rm -f "$work/apk-installed"
+PATH="$fallback_bin:$PATH" FIXTURE_RELEASE="$output" INSTALL_MARKER="$work/apk-installed" \
+	RULE_BOT_CLIENT_TEST_APK_ARCH_FILE="$x86_apk_arch" \
+	sh "$output/install-rule-bot-client-openwrt.sh" \
+	> "$work/apk-fallback.out" 2> "$work/apk-fallback.err"
+test -s "$work/apk-installed"
+grep -F 'uclient-fetch failed; trying wget.' "$work/apk-fallback.err"
+grep -F '_x86_64.apk' "$work/apk-installed"
+
 aarch64_apk_arch="$work/apk-arch-aarch64"
 printf '%s\n' aarch64_cortex-a53 noarch > "$aarch64_apk_arch"
 rm -f "$work/apk-installed"
