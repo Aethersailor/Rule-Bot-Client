@@ -17,6 +17,7 @@ jobs:
   test:
     name: Test and performance gates
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,7 +25,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: stable
+          go-version-file: .go-version
           cache: false
 
       - name: Validate documentation and deployment examples
@@ -73,25 +74,48 @@ jobs:
           dist/rule-bot-client --config "$package_root/etc/rule-bot-client/config.json" --check
 
   cross-build:
-    name: Build linux/${{ matrix.label }}
+    name: Build all Linux targets in one runner
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {label: amd64, arch: amd64}
-          - {label: "386", arch: "386"}
-          - {label: arm64, arch: arm64}
-          - {label: armv7, arch: arm, arm: "7"}
-          - {label: armv6, arch: arm, arm: "6"}
-          - {label: armv5, arch: arm, arm: "5"}
-          - {label: mips-softfloat, arch: mips, mips: softfloat}
-          - {label: mipsle-softfloat, arch: mipsle, mips: softfloat}
-          - {label: mips-hardfloat, arch: mips, mips: hardfloat}
-          - {label: mipsle-hardfloat, arch: mipsle, mips: hardfloat}
-          - {label: mips64, arch: mips64}
-          - {label: mips64le, arch: mips64le}
-          - {label: riscv64, arch: riscv64}
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up the release Go compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: false
+
+      - name: Cross-compile every existing Linux target
+        env:
+          VERSION: ci
+          COMMIT: ${{ github.sha }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: |
+          while IFS=: read -r label arch arm mips; do
+            TARGET_ARCH="$arch" TARGET_ARM="$arm" TARGET_MIPS="$mips" TARGET_LABEL="linux-$label" \
+              GO386=sse2 GOMIPS64=hardfloat OUTPUT="dist/rule-bot-client-$label" sh scripts/build-one.sh
+          done <<'TARGETS'
+          amd64:amd64::
+          386:386::
+          arm64:arm64::
+          armv7:arm:7:
+          armv6:arm:6:
+          armv5:arm:5:
+          mips-softfloat:mips::softfloat
+          mipsle-softfloat:mipsle::softfloat
+          mips-hardfloat:mips::hardfloat
+          mipsle-hardfloat:mipsle::hardfloat
+          mips64:mips64::
+          mips64le:mips64le::
+          riscv64:riscv64::
+          TARGETS
+
+  windows:
+    name: Windows portable smoke test
+    runs-on: windows-2025
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,30 +124,6 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: .go-version
-          cache: false
-
-      - name: Cross-compile
-        env:
-          TARGET_ARCH: ${{ matrix.arch }}
-          TARGET_ARM: ${{ matrix.arm }}
-          TARGET_MIPS: ${{ matrix.mips }}
-          OUTPUT: dist/rule-bot-client-${{ matrix.label }}
-          VERSION: ci
-          COMMIT: ${{ github.sha }}
-          BUILD_DATE: "1970-01-01T00:00:00Z"
-        run: sh scripts/build-one.sh
-
-  windows:
-    name: Windows portable smoke test
-    runs-on: windows-2025
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
           cache: false
 
       - name: Test Windows source
@@ -151,6 +151,7 @@ jobs:
   container:
     name: Container smoke test
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

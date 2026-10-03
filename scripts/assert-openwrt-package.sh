@@ -82,6 +82,20 @@ case "$manager" in
     ;;
 esac
 
+if [ -n "${EXPECTED_VARIANT:-}" ]; then
+  mkdir "$work/payload"
+  if [ "$manager" = ipk ]; then
+    tar -xf "$data" -C "$work/payload"
+  else
+    "$APK_TOOL" extract --allow-untrusted --destination "$work/payload" "$package" >/dev/null
+  fi
+  script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+  for binary in usr/bin/rule-bot-client usr/libexec/rule-bot-client-openwrt; do
+    python3 "$script_dir/openwrt-targets.py" check-binary "$work/payload/$binary" \
+      "$EXPECTED_VARIANT" "${COMMIT:?source commit is required}" "${VERSION:?version is required}"
+  done
+fi
+
 for script in "$postinst" "$postupgrade" "$prerm" "$postrm"; do
   test -s "$script"
   sh -n "$script"

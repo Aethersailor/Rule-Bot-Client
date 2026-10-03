@@ -1,0 +1,264 @@
+{
+  "schema": 1,
+  "sdks": {
+    "ipk": {
+      "release": "24.10.4",
+      "target": "x86",
+      "subtarget": "64"
+    },
+    "apk": {
+      "release": "25.12.0",
+      "target": "x86",
+      "subtarget": "64"
+    }
+  },
+  "variants": {
+    "arm64": {
+      "goarch": "arm64",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "armv6": {
+      "goarch": "arm",
+      "goarm": "6",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "armv5": {
+      "goarch": "arm",
+      "goarm": "5",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "armv7": {
+      "goarch": "arm",
+      "goarm": "7",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "386-softfloat": {
+      "goarch": "386",
+      "goarm": "",
+      "go386": "softfloat",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "386-sse2": {
+      "goarch": "386",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "loong64": {
+      "goarch": "loong64",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "mips-softfloat": {
+      "goarch": "mips",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "softfloat",
+      "gomips64": "hardfloat"
+    },
+    "mips64-softfloat": {
+      "goarch": "mips64",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "softfloat"
+    },
+    "mips64le-softfloat": {
+      "goarch": "mips64le",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "softfloat"
+    },
+    "mipsle-softfloat": {
+      "goarch": "mipsle",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "softfloat",
+      "gomips64": "hardfloat"
+    },
+    "riscv64": {
+      "goarch": "riscv64",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    },
+    "amd64": {
+      "goarch": "amd64",
+      "goarm": "",
+      "go386": "sse2",
+      "gomips": "hardfloat",
+      "gomips64": "hardfloat"
+    }
+  },
+  "packages": [
+    {
+      "variant": "arm64",
+      "ipk": "aarch64_cortex-a53",
+      "apk": "aarch64_cortex-a53"
+    },
+    {
+      "variant": "arm64",
+      "ipk": "aarch64_cortex-a72",
+      "apk": "aarch64_cortex-a72"
+    },
+    {
+      "variant": "arm64",
+      "ipk": "aarch64_cortex-a76",
+      "apk": "aarch64_cortex-a76"
+    },
+    {
+      "variant": "arm64",
+      "ipk": "aarch64_generic",
+      "apk": "aarch64_generic"
+    },
+    {
+      "variant": "armv6",
+      "ipk": "arm_arm1176jzf-s_vfp",
+      "apk": "arm_arm1176jzf-s_vfp"
+    },
+    {
+      "variant": "armv5",
+      "ipk": "arm_arm926ej-s",
+      "apk": "arm_arm926ej-s"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a15_neon-vfpv4",
+      "apk": "arm_cortex-a15_neon-vfpv4"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a5_vfpv4",
+      "apk": "arm_cortex-a5_vfpv4"
+    },
+    {
+      "variant": "armv5",
+      "ipk": "arm_cortex-a7",
+      "apk": "arm_cortex-a7"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a7_neon-vfpv4",
+      "apk": "arm_cortex-a7_neon-vfpv4"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a7_vfpv4",
+      "apk": "arm_cortex-a7_vfpv4"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a8_vfpv3",
+      "apk": "arm_cortex-a8_vfpv3"
+    },
+    {
+      "variant": "armv5",
+      "ipk": "arm_cortex-a9",
+      "apk": "arm_cortex-a9"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a9_neon",
+      "apk": "arm_cortex-a9_neon"
+    },
+    {
+      "variant": "armv7",
+      "ipk": "arm_cortex-a9_vfpv3-d16",
+      "apk": "arm_cortex-a9_vfpv3-d16"
+    },
+    {
+      "variant": "armv5",
+      "ipk": "arm_xscale",
+      "apk": "arm_xscale"
+    },
+    {
+      "variant": "386-softfloat",
+      "ipk": "i386_pentium-mmx",
+      "apk": "i386_pentium-mmx"
+    },
+    {
+      "variant": "386-sse2",
+      "ipk": "i386_pentium4",
+      "apk": "i386_pentium4"
+    },
+    {
+      "variant": "loong64",
+      "ipk": "loongarch64_generic",
+      "apk": "loongarch64_generic"
+    },
+    {
+      "variant": "mips-softfloat",
+      "ipk": "mips_24kc",
+      "apk": "mips_24kc"
+    },
+    {
+      "variant": "mips-softfloat",
+      "ipk": "mips_4kec"
+    },
+    {
+      "variant": "mips-softfloat",
+      "ipk": "mips_mips32",
+      "apk": "mips_mips32"
+    },
+    {
+      "variant": "mips64-softfloat",
+      "ipk": "mips64_mips64r2",
+      "apk": "mips64_mips64r2"
+    },
+    {
+      "variant": "mips64-softfloat",
+      "ipk": "mips64_octeonplus",
+      "apk": "mips64_octeonplus"
+    },
+    {
+      "variant": "mips64le-softfloat",
+      "ipk": "mips64el_mips64r2",
+      "apk": "mips64el_mips64r2"
+    },
+    {
+      "variant": "mipsle-softfloat",
+      "ipk": "mipsel_24kc",
+      "apk": "mipsel_24kc"
+    },
+    {
+      "variant": "mipsle-softfloat",
+      "ipk": "mipsel_24kc_24kf",
+      "apk": "mipsel_24kc_24kf"
+    },
+    {
+      "variant": "mipsle-softfloat",
+      "ipk": "mipsel_74kc",
+      "apk": "mipsel_74kc"
+    },
+    {
+      "variant": "mipsle-softfloat",
+      "ipk": "mipsel_mips32",
+      "apk": "mipsel_mips32"
+    },
+    {
+      "variant": "riscv64",
+      "ipk": "riscv64_riscv64",
+      "apk": "riscv64_generic"
+    },
+    {
+      "variant": "amd64",
+      "ipk": "x86_64",
+      "apk": "x86_64"
+    }
+  ]
+}

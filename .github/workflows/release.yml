@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing published release tag
+        description: Existing release tag to resume a draft or reconcile a published release
         required: true
         type: string
 
@@ -21,11 +21,15 @@ jobs:
   preflight:
     name: Validate release identity
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.identity.outputs.version }}
       commit: ${{ steps.identity.outputs.commit }}
       build_date: ${{ steps.identity.outputs.build_date }}
       image: ${{ steps.identity.outputs.image }}
+      published: ${{ steps.identity.outputs.published }}
     steps:
       - name: Check out complete history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,9 +60,9 @@ jobs:
               fi
               ;;
           esac
-          draft=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft 2>/dev/null || true)
+          draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)
           if test "$GITHUB_EVENT_NAME" = workflow_dispatch; then
-            test "$draft" = false
+            case "$draft" in true|false) ;; *) echo 'The release must already exist' >&2; exit 1 ;; esac
           else
             test "$release_sha" = "$GITHUB_SHA"
             test "$draft" != false
@@ -68,13 +72,15 @@ jobs:
             echo "commit=$release_sha"
             echo "build_date=$(git show -s --format=%cI "$release_sha")"
             echo "image=ghcr.io/${GITHUB_REPOSITORY,,}"
+            echo "published=$([ "$draft" = false ] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
   assets:
     name: Build and attest release assets
     needs: preflight
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || needs.preflight.outputs.published != 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     permissions:
       contents: write
       id-token: write
@@ -86,22 +92,47 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.preflight.outputs.commit }}
 
+      - name: Reuse a complete verified draft asset set
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          COMMIT: ${{ needs.preflight.outputs.commit }}
+        run: |
+          reuse=false
+          if test "$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)" = true; then
+            gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > existing-names.txt
+            if grep -Fx checksums.txt existing-names.txt && grep -Fx client-update-manifest.json existing-names.txt; then
+              gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" --dir existing-assets \
+                --pattern 'rule-bot-client_*' --pattern checksums.txt --pattern client-update-manifest.json
+              jq -e --arg version "$VERSION" --arg commit "$COMMIT" '.schema == 1 and .version == $version and .commit == $commit and (.assets | length == 18)' existing-assets/client-update-manifest.json
+              test "$(find existing-assets -maxdepth 1 -type f | wc -l)" -eq 20
+              (cd existing-assets && sha256sum -c checksums.txt)
+              reuse=true
+            fi
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+
       - name: Set up Go
+        if: steps.existing.outputs.reuse != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: .go-version
           cache: false
 
       - name: Test release source
+        if: steps.existing.outputs.reuse != 'true'
         run: |
           go test -count=1 ./...
           go test -race -count=1 ./...
           go vet ./...
 
       - name: Install release packaging tools
+        if: steps.existing.outputs.reuse != 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends jq zip
 
       - name: Build deterministic archives and packages
+        if: steps.existing.outputs.reuse != 'true'
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
           COMMIT: ${{ needs.preflight.outputs.commit }}
@@ -109,6 +140,7 @@ jobs:
         run: sh scripts/build-release.sh
 
       - name: Verify release asset set and checksums
+        if: steps.existing.outputs.reuse != 'true'
         run: |
           test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 20
           test "$(find dist -maxdepth 1 -type f -name 'rule-bot-client_*_linux_*.tar.gz' | wc -l)" -eq 13
@@ -142,21 +174,23 @@ jobs:
           sha256sum -c checksums.txt
 
       - name: Attest release assets
+        if: steps.existing.outputs.reuse != 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/*
 
       - name: Create or update draft release
+        if: steps.existing.outputs.reuse != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            test "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          if gh release view "${{ needs.preflight.outputs.version }}" >/dev/null 2>&1; then
+            test "$(gh release view "${{ needs.preflight.outputs.version }}" --json isDraft --jq .isDraft)" = true
+            gh release upload "${{ needs.preflight.outputs.version }}" dist/* --clobber
           else
             prerelease=()
-            case "$GITHUB_REF_NAME" in *-*) prerelease+=(--prerelease) ;; esac
-            gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME" "${prerelease[@]}"
+            case "${{ needs.preflight.outputs.version }}" in *-*) prerelease+=(--prerelease) ;; esac
+            gh release create "${{ needs.preflight.outputs.version }}" dist/* --draft --verify-tag --generate-notes --title "${{ needs.preflight.outputs.version }}" "${prerelease[@]}"
           fi
 
   windows-assets:
@@ -167,6 +201,7 @@ jobs:
       needs.preflight.result == 'success' &&
       (needs.assets.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: windows-2025
+    timeout-minutes: 15
     permissions:
       # Draft Releases are hidden from read-only GITHUB_TOKENs.
       contents: write
@@ -212,6 +247,7 @@ jobs:
       needs.preflight.result == 'success' &&
       (needs.assets.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
@@ -229,7 +265,6 @@ jobs:
         uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -242,13 +277,32 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Reuse an existing version image when resuming
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PUBLISHED: ${{ needs.preflight.outputs.published }}
+          IMAGE: ${{ needs.preflight.outputs.image }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          build=true
+          if test "$EVENT" = workflow_dispatch; then
+            if docker buildx imagetools inspect "$IMAGE:${VERSION#v}" >/dev/null 2>&1; then
+              build=false
+            elif test "$PUBLISHED" = true; then
+              echo 'The published GHCR version image is missing' >&2
+              exit 1
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
       - name: Generate image metadata
-        if: github.event_name == 'push'
+        if: steps.plan.outputs.build == 'true'
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            name=${{ needs.preflight.outputs.image }},enable=${{ github.event_name == 'push' }}
+            name=${{ needs.preflight.outputs.image }}
             name=${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
           flavor: |
             latest=false
@@ -257,7 +311,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(needs.preflight.outputs.version, '-') }}
 
       - name: Build and push exact two-platform image
-        if: github.event_name == 'push'
+        if: steps.plan.outputs.build == 'true'
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -273,7 +327,7 @@ jobs:
             BUILD_DATE=${{ needs.preflight.outputs.build_date }}
 
       - name: Reconcile Docker Hub with attested GHCR image
-        if: github.event_name == 'workflow_dispatch'
+        if: steps.plan.outputs.build != 'true'
         id: reconcile
         env:
           GH_TOKEN: ${{ github.token }}
@@ -294,7 +348,7 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Attest image digest
-        if: github.event_name == 'push'
+        if: steps.plan.outputs.build == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ needs.preflight.outputs.image }}
@@ -330,43 +384,74 @@ jobs:
             test "$(docker image inspect "$reference" --format '{{ index .Config.Labels "org.opencontainers.image.created" }}')" = "${{ needs.preflight.outputs.build_date }}"
           done
 
+  openwrt-assets:
+    name: Build OpenWrt release assets
+    needs: [preflight, assets]
+    if: >-
+      always() &&
+      needs.preflight.result == 'success' &&
+      needs.assets.result == 'success' &&
+      needs.preflight.outputs.published != 'true'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/openwrt-release.yml
+    with:
+      commit: ${{ needs.preflight.outputs.commit }}
+      version: ${{ needs.preflight.outputs.version }}
+
   publish:
     name: Publish draft release
-    needs: [preflight, assets, image, windows-assets]
+    needs: [preflight, assets, image, windows-assets, openwrt-assets]
+    if: >-
+      always() &&
+      needs.assets.result == 'success' &&
+      needs.image.result == 'success' &&
+      needs.windows-assets.result == 'success' &&
+      needs.openwrt-assets.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 15
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Verify assets and publish
         env:
           GH_TOKEN: ${{ github.token }}
+          OPENWRT_ASSET_COUNT: ${{ needs.openwrt-assets.outputs.asset_count }}
         run: |
-          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
-          ready=false
-          for _ in $(seq 1 120); do
-            gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
-            if test "$(wc -l < release-assets.txt)" -eq 84 \
-              && grep -Fx checksums.txt release-assets.txt \
-              && grep -Fx client-update-manifest.json release-assets.txt \
-              && grep -Fx openwrt-checksums.txt release-assets.txt \
-              && grep -Fx openwrt-manifest.tsv release-assets.txt \
-              && grep -Fx install-rule-bot-client-openwrt.sh release-assets.txt \
-              && test "$(grep -Ec '^rule-bot-client_.*_windows_(amd64|arm64)\.zip$' release-assets.txt)" -eq 2 \
-              && test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq 61; then
-              ready=true
-              break
-            fi
-            sleep 30
-          done
-          test "$ready" = true
-          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+          test "$(gh release view "${{ needs.preflight.outputs.version }}" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name openwrt-release-assets --dir openwrt-release
+          gh release upload "${{ needs.preflight.outputs.version }}" --repo "$GITHUB_REPOSITORY" openwrt-release/* --clobber
+          gh release view "${{ needs.preflight.outputs.version }}" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > release-assets.txt
+          test "$(wc -l < release-assets.txt)" -eq "$((20 + OPENWRT_ASSET_COUNT))"
+          grep -Fx checksums.txt release-assets.txt
+          grep -Fx client-update-manifest.json release-assets.txt
+          grep -Fx openwrt-checksums.txt release-assets.txt
+          grep -Fx openwrt-manifest.tsv release-assets.txt
+          grep -Fx install-rule-bot-client-openwrt.sh release-assets.txt
+          test "$(grep -Ec '^rule-bot-client_.*_windows_(amd64|arm64)\.zip$' release-assets.txt)" -eq 2
+          test "$(grep -Ec '^luci-app-rule-bot-client.*\.(ipk|apk)$' release-assets.txt)" -eq "$((OPENWRT_ASSET_COUNT - 3))"
+          gh release edit "${{ needs.preflight.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Remove this run's published intermediate artifacts
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name == "openwrt-variants" or .name == "openwrt-ipk" or .name == "openwrt-apk" or .name == "openwrt-release-assets") | .id' > artifact-ids.txt
+          while read -r id; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" --method DELETE
+          done < artifact-ids.txt
 
   public-update-linux:
     name: Verify public Linux automatic updates
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && needs.preflight.outputs.published == 'true'
     needs: preflight
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -409,9 +494,10 @@ jobs:
 
   public-update-windows:
     name: Verify public Windows automatic update
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && needs.preflight.outputs.published == 'true'
     needs: preflight
     runs-on: windows-2025
+    timeout-minutes: 15
     steps:
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

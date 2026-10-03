@@ -9,7 +9,7 @@ on:
     types:
       - completed
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -28,10 +28,12 @@ jobs:
     name: Reconcile trusted bot PRs
     if: >-
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.event == 'pull_request' ||
-      github.event.workflow_run.event == 'push' ||
-      github.event.workflow_run.event == 'workflow_dispatch'
+      (github.event.workflow_run.conclusion == 'success' &&
+        (github.event.workflow_run.event == 'pull_request' ||
+         ((github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
+          github.event.workflow_run.head_branch == github.event.repository.default_branch)))
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Merge one fully validated trusted bot PR
         env:
@@ -53,7 +55,8 @@ jobs:
             run=$(jq -c \
               --arg workflow "$workflow" \
               --arg sha "$default_sha" \
-              '[.workflow_runs[] | select(.name == $workflow and .head_sha == $sha)] |
+              --arg branch "$default_branch" \
+              '[.workflow_runs[] | select(.name == $workflow and .head_sha == $sha and .head_branch == $branch and (.event == "push" or .event == "workflow_dispatch"))] |
                sort_by(.id) | last // null' \
               <<<"$base_runs")
             if test "$run" = null; then
@@ -69,15 +72,7 @@ jobs:
               exit 0
             fi
             if test "$conclusion" != success; then
-              run_id=$(jq -r '.id' <<<"$run")
-              run_attempt=$(jq -r '.run_attempt // 1' <<<"$run")
-              if [[ "$conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
-                 test "$run_attempt" -lt 3; then
-                gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/rerun-failed-jobs"
-                echo "Re-running failed $workflow gate $run_id for default branch $default_sha (attempt $((run_attempt + 1))/3)"
-                exit 0
-              fi
-              echo "Default branch $default_sha is not green in $workflow after $run_attempt attempt(s): $conclusion"
+              echo "Default branch $default_sha is not green in $workflow $conclusion; automatic retry is disabled"
               exit 0
             fi
           done
@@ -140,15 +135,7 @@ jobs:
                 break
               fi
               if test "$conclusion" != success; then
-                run_id=$(jq -r '.id' <<<"$run")
-                run_attempt=$(jq -r '.run_attempt // 1' <<<"$run")
-                if [[ "$conclusion" =~ ^(failure|cancelled|timed_out|startup_failure|stale)$ ]] &&
-                   test "$run_attempt" -lt 3; then
-                  gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/rerun-failed-jobs"
-                  echo "Re-running failed $workflow gate $run_id for PR #$pull_number (attempt $((run_attempt + 1))/3)"
-                  exit 0
-                fi
-                echo "PR #$pull_number is not green in $workflow after $run_attempt attempt(s): $conclusion"
+                echo "PR #$pull_number is not green in $workflow $conclusion; automatic retry is disabled"
                 gates_ok=false
                 break
               fi

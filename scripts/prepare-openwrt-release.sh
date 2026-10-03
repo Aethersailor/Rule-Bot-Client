@@ -22,6 +22,9 @@ printf '%s' "$repository" | grep -Eq '^[0-9A-Za-z_.-]+/[0-9A-Za-z_.-]+$' || { ec
 [ ! -e "$output" ] || { echo "output already exists: $output" >&2; exit 2; }
 
 mkdir -p "$output"
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+allowed=$(python3 "$script_dir/openwrt-targets.py" pairs)
+expected_count=$(printf '%s\n' "$allowed" | wc -l | tr -d ' ')
 entries="$output/.manifest.entries"
 : > "$entries"
 
@@ -35,30 +38,10 @@ find "$artifact_root" -type f -name manifest.json -print | sort | while IFS= rea
 	sdk_url=$(jq -r '.sdk_url' "$manifest")
 
 	[ "$head_sha" = "$commit" ] || { echo "artifact commit mismatch in $manifest" >&2; exit 1; }
-	case "$manager:$architecture" in
-		apk:aarch64_cortex-a53|apk:aarch64_cortex-a72|apk:aarch64_cortex-a76|\
-		apk:aarch64_generic|apk:arm_arm1176jzf-s_vfp|apk:arm_arm926ej-s|\
-		apk:arm_cortex-a15_neon-vfpv4|apk:arm_cortex-a5_vfpv4|apk:arm_cortex-a7|\
-		apk:arm_cortex-a7_neon-vfpv4|apk:arm_cortex-a7_vfpv4|apk:arm_cortex-a8_vfpv3|\
-		apk:arm_cortex-a9|apk:arm_cortex-a9_neon|apk:arm_cortex-a9_vfpv3-d16|\
-		apk:arm_xscale|apk:i386_pentium-mmx|apk:i386_pentium4|\
-		apk:loongarch64_generic|apk:mips64_mips64r2|apk:mips64_octeonplus|\
-		apk:mips64el_mips64r2|apk:mips_24kc|apk:mips_mips32|\
-		apk:mipsel_24kc|apk:mipsel_24kc_24kf|apk:mipsel_74kc|\
-		apk:mipsel_mips32|apk:riscv64_generic|apk:x86_64|\
-		ipk:aarch64_cortex-a53|ipk:aarch64_cortex-a72|ipk:aarch64_cortex-a76|\
-		ipk:aarch64_generic|ipk:arm_arm1176jzf-s_vfp|ipk:arm_arm926ej-s|\
-		ipk:arm_cortex-a15_neon-vfpv4|ipk:arm_cortex-a5_vfpv4|ipk:arm_cortex-a7|\
-		ipk:arm_cortex-a7_neon-vfpv4|ipk:arm_cortex-a7_vfpv4|ipk:arm_cortex-a8_vfpv3|\
-		ipk:arm_cortex-a9|ipk:arm_cortex-a9_neon|ipk:arm_cortex-a9_vfpv3-d16|\
-		ipk:arm_xscale|ipk:i386_pentium-mmx|ipk:i386_pentium4|\
-		ipk:loongarch64_generic|ipk:mips64_mips64r2|ipk:mips64_octeonplus|\
-		ipk:mips64el_mips64r2|ipk:mips_24kc|ipk:mips_4kec|\
-		ipk:mips_mips32|ipk:mipsel_24kc|ipk:mipsel_24kc_24kf|\
-		ipk:mipsel_74kc|ipk:mipsel_mips32|ipk:riscv64_riscv64|\
-		ipk:x86_64 ) ;;
-		*) echo "unexpected package identity $manager:$architecture" >&2; exit 1 ;;
-	esac
+	printf '%s\n' "$allowed" | grep -Fx "$manager:$architecture" >/dev/null || {
+		echo "unexpected package identity $manager:$architecture" >&2
+		exit 1
+	}
 	printf '%s' "$package_name" | grep -Eq '^luci-app-rule-bot-client[-_+.0-9A-Za-z]+\.(ipk|apk)$' || {
 		echo "unsafe package filename in $manifest" >&2
 		exit 1
@@ -88,8 +71,8 @@ find "$artifact_root" -type f -name manifest.json -print | sort | while IFS= rea
 	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$manager" "$architecture" "$asset" "$package_sha256" "$package_size" "$sdk_url" >> "$entries"
 done
 
-[ "$(wc -l < "$entries" | tr -d ' ')" -eq 61 ] || { echo 'expected exactly 61 OpenWrt package manifests' >&2; exit 1; }
-[ "$(cut -f1,2 "$entries" | sort -u | wc -l | tr -d ' ')" -eq 61 ] || { echo 'duplicate manager/architecture pair' >&2; exit 1; }
+[ "$(wc -l < "$entries" | tr -d ' ')" -eq "$expected_count" ] || { echo "expected exactly $expected_count OpenWrt package manifests" >&2; exit 1; }
+[ "$(cut -f1,2 "$entries" | sort -u | wc -l | tr -d ' ')" -eq "$expected_count" ] || { echo 'duplicate manager/architecture pair' >&2; exit 1; }
 
 {
 	printf 'format\tarchitecture\tasset\tsha256\tsize\tsdk_url\n'
@@ -107,4 +90,4 @@ sed -e "s/@VERSION@/$version/g" -e "s#@REPOSITORY@#$repository#g" \
 	scripts/install-openwrt.sh > "$output/install-rule-bot-client-openwrt.sh"
 chmod 0755 "$output/install-rule-bot-client-openwrt.sh"
 
-test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 64
+test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq "$((expected_count + 3))"

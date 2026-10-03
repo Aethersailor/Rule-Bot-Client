@@ -1,0 +1,149 @@
+name: OpenWrt Release Packages
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+    outputs:
+      asset_count:
+        value: ${{ jobs.prepare.outputs.asset_count }}
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    name: Compile the 13 Go ABI variants once
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out build orchestration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out immutable application source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          path: release-source
+
+      - name: Set up the release Go compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: release-source/.go-version
+          cache: false
+
+      - name: Build verified static binaries
+        env:
+          COMMIT: ${{ inputs.commit }}
+          RELEASE_TAG: ${{ inputs.version }}
+          BUILD_DATE: "1970-01-01T00:00:00Z"
+        run: VERSION=${RELEASE_TAG#v} bash scripts/build-openwrt-variants.sh release-source binaries
+
+      - name: Upload reusable binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openwrt-variants
+          path: binaries
+          retention-days: 1
+          if-no-files-found: error
+
+  package:
+    name: Package all ${{ matrix.manager }} architectures
+    needs: binaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        manager: [ipk, apk]
+    steps:
+      - name: Check out build orchestration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out immutable application source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit }}
+          path: release-source
+
+      - name: Set up Go for ABI inspection
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: release-source/.go-version
+          cache: false
+
+      - name: Download the compiled variants
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: openwrt-variants
+          path: binaries
+
+      - name: Generate packages with one native SDK per manager
+        env:
+          COMMIT: ${{ inputs.commit }}
+          RELEASE_TAG: ${{ inputs.version }}
+        run: VERSION=${RELEASE_TAG#v} bash scripts/package-openwrt-batch.sh '${{ matrix.manager }}' release-source binaries packages
+
+      - name: Attest the verified package batch
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: packages/**/*.${{ matrix.manager }}
+
+      - name: Upload the package batch
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openwrt-${{ matrix.manager }}
+          path: packages
+          retention-days: 1
+          if-no-files-found: error
+
+  prepare:
+    name: Prepare the complete OpenWrt asset set
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      asset_count: ${{ steps.prepare.outputs.asset_count }}
+    steps:
+      - name: Check out build orchestration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download the IPK package batch
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: openwrt-ipk
+          path: downloaded/ipk
+
+      - name: Download the APK package batch
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: openwrt-apk
+          path: downloaded/apk
+
+      - name: Assemble checksums, manifest and installer
+        id: prepare
+        env:
+          COMMIT: ${{ inputs.commit }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          sh scripts/prepare-openwrt-release.sh "$VERSION" "$COMMIT" downloaded openwrt-release
+          (cd openwrt-release && sha256sum -c openwrt-checksums.txt)
+          echo "asset_count=$(find openwrt-release -maxdepth 1 -type f | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the complete asset set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openwrt-release-assets
+          path: openwrt-release
+          retention-days: 1
+          if-no-files-found: error

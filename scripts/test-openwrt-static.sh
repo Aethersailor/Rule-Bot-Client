@@ -4,9 +4,7 @@ set -eu
 root=openwrt/package/luci-app-rule-bot-client/files
 
 test -f openwrt/package/luci-app-rule-bot-client/Makefile
-test "$(grep -c '^[[:space:]]*- manager: ipk$' .github/workflows/openwrt-packages.yml)" -eq 31
-test "$(grep -c '^[[:space:]]*- manager: apk$' .github/workflows/openwrt-packages.yml)" -eq 30
-test "$(grep -c '^[[:space:]]*- manager:' .github/workflows/openwrt-packages.yml)" -eq 61
+python3 scripts/openwrt-targets.py stats | jq -e '.variants == 13 and .ipk == 31 and .apk == 30 and .packages == 61' >/dev/null
 test -x "$root/etc/init.d/rule-bot-client" || test -f "$root/etc/init.d/rule-bot-client"
 test -f "$root/etc/config/rule_bot_client"
 test -f "$root/lib/upgrade/keep.d/rule-bot-client"
@@ -23,18 +21,18 @@ grep -F 'DEPENDS:=+ca-bundle +rpcd +rpcd-mod-ucode +ucode +ucode-mod-fs +luci-ba
 # shellcheck disable=SC2016
 grep -F 'PKG_VERSION:=$(if $(RULE_BOT_CLIENT_VERSION),$(RULE_BOT_CLIENT_VERSION),0.1.0)' openwrt/package/luci-app-rule-bot-client/Makefile
 # shellcheck disable=SC2016
-grep -F 'version="0.1.0_git${GITHUB_RUN_ID}"' .github/workflows/openwrt-packages.yml
+grep -F 'VERSION=${RELEASE_TAG#v}' .github/workflows/openwrt-release.yml
 # This is an intentional literal OpenWrt make variable reference.
 # shellcheck disable=SC2016
 grep -F '$(STAGING_DIR_HOSTPKG)/bin/po2lmo ./po/zh_Hans/rule_bot_client.po' openwrt/package/luci-app-rule-bot-client/Makefile
 grep -F '/usr/lib/lua/luci/i18n/rule_bot_client.zh-cn.lmo' openwrt/package/luci-app-rule-bot-client/Makefile
 # These are intentional literal workflow environment variable references.
 # shellcheck disable=SC2016
-grep -F './scripts/feeds update luci' .github/workflows/openwrt-packages.yml
-grep -F 'make -C feeds/luci/modules/luci-base/src po2lmo CC=cc' .github/workflows/openwrt-packages.yml
-grep -F 'install -D -m 0755 feeds/luci/modules/luci-base/src/po2lmo staging_dir/hostpkg/bin/po2lmo' .github/workflows/openwrt-packages.yml
+grep -F './scripts/feeds update luci' scripts/package-openwrt-batch.sh
+grep -F 'make -C feeds/luci/modules/luci-base/src po2lmo CC=cc' scripts/package-openwrt-batch.sh
+grep -F 'install -D -m 0755 feeds/luci/modules/luci-base/src/po2lmo staging_dir/hostpkg/bin/po2lmo' scripts/package-openwrt-batch.sh
 # shellcheck disable=SC2016
-grep -F 'test -x "$SDK_DIR/staging_dir/hostpkg/bin/po2lmo"' .github/workflows/openwrt-packages.yml
+grep -F 'test -x "$SDK_DIR/staging_dir/hostpkg/bin/po2lmo"' scripts/package-openwrt-batch.sh
 
 for path in \
   /etc/config/rule_bot_client \

@@ -10,6 +10,7 @@ PKG_BUILD_DEPENDS:=luci-base/host
 include $(INCLUDE_DIR)/package.mk
 
 define Package/luci-app-rule-bot-client
+  PKGARCH:=$(if $(RULE_BOT_CLIENT_PACKAGE_ARCH),$(RULE_BOT_CLIENT_PACKAGE_ARCH),$(ARCH))
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=Web Servers/Proxies
@@ -17,6 +18,12 @@ define Package/luci-app-rule-bot-client
   URL:=https://github.com/Aethersailor/Rule-Bot-Client
   DEPENDS:=+ca-bundle +rpcd +rpcd-mod-ucode +ucode +ucode-mod-fs +luci-base
 endef
+
+ifneq ($(RULE_BOT_CLIENT_PACKAGE_ARCH),)
+# Batch releases install already-stripped, ABI-verified static Go executables.
+# Keep their build metadata and never run a foreign target strip tool on them.
+RSTRIP:=:
+endif
 
 define Package/luci-app-rule-bot-client/description
  Rule-Bot Client collects final MATCH domains from multiple Mihomo controllers.
