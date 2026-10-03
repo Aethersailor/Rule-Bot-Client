@@ -334,6 +334,7 @@ jobs:
     name: Publish draft release
     needs: [preflight, assets, image, windows-assets]
     runs-on: ubuntu-24.04
+    timeout-minutes: 70
     permissions:
       contents: write
     steps:
@@ -356,7 +357,7 @@ jobs:
               ready=true
               break
             fi
-            sleep 10
+            sleep 30
           done
           test "$ready" = true
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
