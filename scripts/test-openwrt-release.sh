@@ -11,7 +11,12 @@ commit=0123456789abcdef0123456789abcdef01234567
 mkdir -p "$artifacts"
 
 for manager in ipk apk; do
-	for architecture in x86_64 aarch64_generic aarch64_cortex-a53 mips_24kc mipsel_24kc; do
+	if [ "$manager" = ipk ]; then
+		architectures="aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic arm_arm1176jzf-s_vfp arm_arm926ej-s arm_cortex-a15_neon-vfpv4 arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_xscale i386_pentium-mmx i386_pentium4 loongarch64_generic mips64_mips64r2 mips64_octeonplus mips64el_mips64r2 mips_24kc mips_4kec mips_mips32 mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 riscv64_riscv64 x86_64"
+	else
+		architectures="aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic arm_arm1176jzf-s_vfp arm_arm926ej-s arm_cortex-a15_neon-vfpv4 arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_xscale i386_pentium-mmx i386_pentium4 loongarch64_generic mips64_mips64r2 mips64_octeonplus mips64el_mips64r2 mips_24kc mips_mips32 mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 riscv64_generic x86_64"
+	fi
+	for architecture in $architectures; do
 		directory="$artifacts/luci-app-rule-bot-client-${manager}-${architecture}"
 		mkdir -p "$directory"
 		if [ "$manager" = ipk ]; then
@@ -40,10 +45,10 @@ done
 GITHUB_REPOSITORY=Aethersailor/Rule-Bot-Client \
 	sh scripts/prepare-openwrt-release.sh v0.2.0 "$commit" "$artifacts" "$output"
 
-test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 13
-test "$(find "$output" -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 5
-test "$(find "$output" -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 5
-test "$(cut -f1,2 "$output/openwrt-manifest.tsv" | tail -n +2 | sort -u | wc -l)" -eq 10
+test "$(find "$output" -maxdepth 1 -type f | wc -l)" -eq 64
+test "$(find "$output" -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 31
+test "$(find "$output" -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 30
+test "$(cut -f1,2 "$output/openwrt-manifest.tsv" | tail -n +2 | sort -u | wc -l)" -eq 61
 if grep -F '@VERSION@' "$output/install-rule-bot-client-openwrt.sh"; then
 	echo 'generated installer still contains the version placeholder' >&2
 	exit 1

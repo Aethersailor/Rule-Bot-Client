@@ -66,79 +66,431 @@ jobs:
   package:
     name: ${{ matrix.manager }} ${{ matrix.target }}/${{ matrix.subtarget }} (${{ matrix.package_arch }})
     needs: validate
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
       attestations: write
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         include:
           - manager: ipk
             release: 24.10.4
-            target: x86
-            subtarget: "64"
-            package_arch: x86_64
-            goarch: amd64
-          - manager: ipk
-            release: 24.10.4
-            target: armsr
-            subtarget: armv8
-            package_arch: aarch64_generic
-            goarch: arm64
-          - manager: ipk
-            release: 24.10.4
             target: mediatek
-            subtarget: filogic
+            subtarget: "filogic"
             package_arch: aarch64_cortex-a53
             goarch: arm64
           - manager: ipk
             release: 24.10.4
+            target: bcm27xx
+            subtarget: "bcm2711"
+            package_arch: aarch64_cortex-a72
+            goarch: arm64
+          - manager: ipk
+            release: 24.10.4
+            target: bcm27xx
+            subtarget: "bcm2712"
+            package_arch: aarch64_cortex-a76
+            goarch: arm64
+          - manager: ipk
+            release: 24.10.4
+            target: armsr
+            subtarget: "armv8"
+            package_arch: aarch64_generic
+            goarch: arm64
+          - manager: ipk
+            release: 24.10.4
+            target: bcm27xx
+            subtarget: "bcm2708"
+            package_arch: arm_arm1176jzf-s_vfp
+            goarch: arm
+            goarm: "6"
+          - manager: ipk
+            release: 24.10.4
+            target: at91
+            subtarget: "sam9x"
+            package_arch: arm_arm926ej-s
+            goarch: arm
+            goarm: "5"
+          - manager: ipk
+            release: 24.10.4
+            target: armsr
+            subtarget: "armv7"
+            package_arch: arm_cortex-a15_neon-vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: at91
+            subtarget: "sama5"
+            package_arch: arm_cortex-a5_vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: mediatek
+            subtarget: "mt7629"
+            package_arch: arm_cortex-a7
+            goarch: arm
+            goarm: "5"
+          - manager: ipk
+            release: 24.10.4
+            target: bcm27xx
+            subtarget: "bcm2709"
+            package_arch: arm_cortex-a7_neon-vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: at91
+            subtarget: "sama7"
+            package_arch: arm_cortex-a7_vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: omap
+            subtarget: "generic"
+            package_arch: arm_cortex-a8_vfpv3
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: bcm53xx
+            subtarget: "generic"
+            package_arch: arm_cortex-a9
+            goarch: arm
+            goarm: "5"
+          - manager: ipk
+            release: 24.10.4
+            target: imx
+            subtarget: "cortexa9"
+            package_arch: arm_cortex-a9_neon
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: mvebu
+            subtarget: "cortexa9"
+            package_arch: arm_cortex-a9_vfpv3-d16
+            goarch: arm
+            goarm: "7"
+          - manager: ipk
+            release: 24.10.4
+            target: kirkwood
+            subtarget: "generic"
+            package_arch: arm_xscale
+            goarch: arm
+            goarm: "5"
+          - manager: ipk
+            release: 24.10.4
+            target: x86
+            subtarget: "geode"
+            package_arch: i386_pentium-mmx
+            goarch: 386
+            go386: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: x86
+            subtarget: "generic"
+            package_arch: i386_pentium4
+            goarch: 386
+            go386: "sse2"
+          - manager: ipk
+            release: 24.10.4
+            target: loongarch64
+            subtarget: "generic"
+            package_arch: loongarch64_generic
+            goarch: loong64
+          - manager: ipk
+            release: 24.10.4
             target: ath79
-            subtarget: generic
+            subtarget: "generic"
             package_arch: mips_24kc
             goarch: mips
-            gomips: softfloat
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: realtek
+            subtarget: "rtl838x"
+            package_arch: mips_4kec
+            goarch: mips
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: bmips
+            subtarget: "bcm6318"
+            package_arch: mips_mips32
+            goarch: mips
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: malta
+            subtarget: "be64"
+            package_arch: mips64_mips64r2
+            goarch: mips64
+            gomips64: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: octeon
+            subtarget: "generic"
+            package_arch: mips64_octeonplus
+            goarch: mips64
+            gomips64: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: malta
+            subtarget: "le64"
+            package_arch: mips64el_mips64r2
+            goarch: mips64le
+            gomips64: "softfloat"
           - manager: ipk
             release: 24.10.4
             target: ramips
-            subtarget: mt7621
+            subtarget: "mt7621"
             package_arch: mipsel_24kc
             goarch: mipsle
-            gomips: softfloat
-          - manager: apk
-            release: 25.12.0
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: pistachio
+            subtarget: "generic"
+            package_arch: mipsel_24kc_24kf
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: bcm47xx
+            subtarget: "mips74k"
+            package_arch: mipsel_74kc
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: bcm47xx
+            subtarget: "generic"
+            package_arch: mipsel_mips32
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: ipk
+            release: 24.10.4
+            target: d1
+            subtarget: "generic"
+            package_arch: riscv64_riscv64
+            goarch: riscv64
+          - manager: ipk
+            release: 24.10.4
             target: x86
             subtarget: "64"
             package_arch: x86_64
             goarch: amd64
           - manager: apk
             release: 25.12.0
-            target: armsr
-            subtarget: armv8
-            package_arch: aarch64_generic
-            goarch: arm64
-          - manager: apk
-            release: 25.12.0
             target: mediatek
-            subtarget: filogic
+            subtarget: "filogic"
             package_arch: aarch64_cortex-a53
             goarch: arm64
           - manager: apk
             release: 25.12.0
+            target: bcm27xx
+            subtarget: "bcm2711"
+            package_arch: aarch64_cortex-a72
+            goarch: arm64
+          - manager: apk
+            release: 25.12.0
+            target: bcm27xx
+            subtarget: "bcm2712"
+            package_arch: aarch64_cortex-a76
+            goarch: arm64
+          - manager: apk
+            release: 25.12.0
+            target: armsr
+            subtarget: "armv8"
+            package_arch: aarch64_generic
+            goarch: arm64
+          - manager: apk
+            release: 25.12.0
+            target: bcm27xx
+            subtarget: "bcm2708"
+            package_arch: arm_arm1176jzf-s_vfp
+            goarch: arm
+            goarm: "6"
+          - manager: apk
+            release: 25.12.0
+            target: at91
+            subtarget: "sam9x"
+            package_arch: arm_arm926ej-s
+            goarch: arm
+            goarm: "5"
+          - manager: apk
+            release: 25.12.0
+            target: armsr
+            subtarget: "armv7"
+            package_arch: arm_cortex-a15_neon-vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: at91
+            subtarget: "sama5"
+            package_arch: arm_cortex-a5_vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: mediatek
+            subtarget: "mt7629"
+            package_arch: arm_cortex-a7
+            goarch: arm
+            goarm: "5"
+          - manager: apk
+            release: 25.12.0
+            target: bcm27xx
+            subtarget: "bcm2709"
+            package_arch: arm_cortex-a7_neon-vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: at91
+            subtarget: "sama7"
+            package_arch: arm_cortex-a7_vfpv4
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: omap
+            subtarget: "generic"
+            package_arch: arm_cortex-a8_vfpv3
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: bcm53xx
+            subtarget: "generic"
+            package_arch: arm_cortex-a9
+            goarch: arm
+            goarm: "5"
+          - manager: apk
+            release: 25.12.0
+            target: imx
+            subtarget: "cortexa9"
+            package_arch: arm_cortex-a9_neon
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: mvebu
+            subtarget: "cortexa9"
+            package_arch: arm_cortex-a9_vfpv3-d16
+            goarch: arm
+            goarm: "7"
+          - manager: apk
+            release: 25.12.0
+            target: kirkwood
+            subtarget: "generic"
+            package_arch: arm_xscale
+            goarch: arm
+            goarm: "5"
+          - manager: apk
+            release: 25.12.0
+            target: x86
+            subtarget: "geode"
+            package_arch: i386_pentium-mmx
+            goarch: 386
+            go386: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: x86
+            subtarget: "generic"
+            package_arch: i386_pentium4
+            goarch: 386
+            go386: "sse2"
+          - manager: apk
+            release: 25.12.0
+            target: loongarch64
+            subtarget: "generic"
+            package_arch: loongarch64_generic
+            goarch: loong64
+          - manager: apk
+            release: 25.12.0
             target: ath79
-            subtarget: generic
+            subtarget: "generic"
             package_arch: mips_24kc
             goarch: mips
-            gomips: softfloat
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: bmips
+            subtarget: "bcm6318"
+            package_arch: mips_mips32
+            goarch: mips
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: malta
+            subtarget: "be64"
+            package_arch: mips64_mips64r2
+            goarch: mips64
+            gomips64: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: octeon
+            subtarget: "generic"
+            package_arch: mips64_octeonplus
+            goarch: mips64
+            gomips64: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: malta
+            subtarget: "le64"
+            package_arch: mips64el_mips64r2
+            goarch: mips64le
+            gomips64: "softfloat"
           - manager: apk
             release: 25.12.0
             target: ramips
-            subtarget: mt7621
+            subtarget: "mt7621"
             package_arch: mipsel_24kc
             goarch: mipsle
-            gomips: softfloat
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: pistachio
+            subtarget: "generic"
+            package_arch: mipsel_24kc_24kf
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: bcm47xx
+            subtarget: "mips74k"
+            package_arch: mipsel_74kc
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: bcm47xx
+            subtarget: "generic"
+            package_arch: mipsel_mips32
+            goarch: mipsle
+            gomips: "softfloat"
+          - manager: apk
+            release: 25.12.0
+            target: d1
+            subtarget: "generic"
+            package_arch: riscv64_generic
+            goarch: riscv64
+          - manager: apk
+            release: 25.12.0
+            target: x86
+            subtarget: "64"
+            package_arch: x86_64
+            goarch: amd64
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -196,6 +548,9 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.goarch }}
           TARGET_MIPS: ${{ matrix.gomips }}
+          TARGET_ARM: ${{ matrix.goarm }}
+          GOMIPS64: ${{ matrix.gomips64 || 'hardfloat' }}
+          GO386: ${{ matrix.go386 || 'sse2' }}
           VERSION: ${{ steps.identity.outputs.version }}
           COMMIT: ${{ github.sha }}
           BUILD_DATE: "1970-01-01T00:00:00Z"
@@ -264,7 +619,7 @@ jobs:
           name: luci-app-rule-bot-client-${{ matrix.manager }}-${{ matrix.package_arch }}
           path: artifact/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Attest package
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.0.0
@@ -291,7 +646,7 @@ jobs:
         run: |
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --pattern 'luci-app-rule-bot-client-*' --dir downloaded
-          test "$(find downloaded -type f -name manifest.json | wc -l)" -eq 10
+          test "$(find downloaded -type f -name manifest.json | wc -l)" -eq 61
 
       - name: Prepare collision-free release assets and installer
         run: |
