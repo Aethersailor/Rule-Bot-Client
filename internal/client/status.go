@@ -41,9 +41,12 @@ type OutputStatus struct {
 }
 
 type RuleBotStatus struct {
-	Enabled   bool   `json:"enabled"`
-	StateFile string `json:"state_file,omitempty"`
-	Offset    int64  `json:"offset"`
+	Enabled        bool      `json:"enabled"`
+	StateFile      string    `json:"state_file,omitempty"`
+	Offset         int64     `json:"offset"`
+	Pending        int       `json:"pending"`
+	UnscannedBytes int64     `json:"unscanned_bytes"`
+	NextRetryAt    time.Time `json:"next_retry_at,omitzero"`
 }
 
 type statusReporter struct {
@@ -178,6 +181,14 @@ func (r *statusReporter) refreshStorage() {
 	if r.status.RuleBot.Enabled && r.stateFile != "" {
 		if state, exists, err := loadRuleBotState(r.stateFile); err == nil && exists {
 			r.status.RuleBot.Offset = state.Offset
+			r.status.RuleBot.Pending = len(state.Pending)
+			r.status.RuleBot.UnscannedBytes = max(0, r.status.Output.Bytes-state.Offset)
+			r.status.RuleBot.NextRetryAt = time.Time{}
+			for _, pending := range state.Pending {
+				if r.status.RuleBot.NextRetryAt.IsZero() || pending.NextAttempt.Before(r.status.RuleBot.NextRetryAt) {
+					r.status.RuleBot.NextRetryAt = pending.NextAttempt
+				}
+			}
 		}
 	}
 	r.mutex.Unlock()

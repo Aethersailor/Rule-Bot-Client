@@ -489,19 +489,9 @@ func TestRuleBotDeliveryLogDoesNotExposeEndpointOrToken(t *testing.T) {
 		})},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	var logs lockedBuffer
-	result := make(chan error, 1)
-	go func() {
-		result <- sender.deliverUntilTerminal(ctx, log.New(&logs, "", 0), "example.com")
-	}()
-	deadline := time.Now().Add(time.Second)
-	for !strings.Contains(logs.String(), "delivery_failed=") && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	cancel()
-	if err := <-result; err != nil {
-		t.Fatal(err)
+	if _, err := sender.attempt(context.Background(), log.New(&logs, "", 0), "example.com"); err == nil {
+		t.Fatal("expected network error")
 	}
 	if strings.Contains(logs.String(), "private-rule-bot.example") || strings.Contains(logs.String(), "/api/private/hidden-path") || strings.Contains(logs.String(), token) || !strings.Contains(logs.String(), "delivery_failed=network_error") {
 		t.Fatalf("delivery log exposed endpoint: %q", logs.String())
@@ -526,19 +516,9 @@ func TestRuleBotCredentialErrorLogDoesNotExposeToken(t *testing.T) {
 		})},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	var logs lockedBuffer
-	result := make(chan error, 1)
-	go func() {
-		result <- sender.deliverUntilTerminal(ctx, log.New(&logs, "", 0), "example.com")
-	}()
-	deadline := time.Now().Add(time.Second)
-	for !strings.Contains(logs.String(), "delivery_failed=") && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	cancel()
-	if err := <-result; err != nil {
-		t.Fatal(err)
+	if _, err := sender.attempt(context.Background(), log.New(&logs, "", 0), "example.com"); err == nil {
+		t.Fatal("expected credential error")
 	}
 	if requests.Load() != 0 {
 		t.Fatal("invalid token reached the HTTP transport")
@@ -576,7 +556,7 @@ func waitForRuleBotOffset(t *testing.T, path string, want int64) {
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		state, exists, err := loadRuleBotState(path)
-		if err == nil && exists && state.Offset == want {
+		if err == nil && exists && state.Offset == want && len(state.Pending) == 0 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)

@@ -16,11 +16,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const ruleBotStateVersion = 1
+const (
+	ruleBotStateVersion  = 2
+	maxRuleBotPending    = 1024
+	maxRuleBotStateBytes = 256 * 1024
+)
 
 var terminalRuleBotStatuses = map[string]struct{}{
 	"added":           {},
@@ -32,19 +37,30 @@ var terminalRuleBotStatuses = map[string]struct{}{
 }
 
 type ruleBotState struct {
-	Version int   `json:"version"`
-	Offset  int64 `json:"offset"`
+	Version    int              `json:"version"`
+	Offset     int64            `json:"offset"`
+	Pending    []ruleBotPending `json:"pending,omitempty"`
+	PauseUntil time.Time        `json:"pause_until,omitzero"`
+}
+
+// Retry entries reference the append-only output instead of duplicating domains.
+type ruleBotPending struct {
+	Offset      int64         `json:"offset"`
+	NextAttempt time.Time     `json:"next_attempt"`
+	Delay       time.Duration `json:"delay"`
 }
 
 type ruleBotResponse struct {
-	Version int    `json:"version"`
-	Status  string `json:"status"`
+	Version  int    `json:"version"`
+	Status   string `json:"status"`
+	Deferred bool   `json:"deferred,omitempty"`
 }
 
 type ruleBotDeliveryError struct {
 	statusCode int
 	status     string
 	auth       bool
+	retryAfter time.Duration
 	err        error
 }
 
@@ -59,12 +75,14 @@ func (e *ruleBotDeliveryError) Error() string {
 }
 
 type ruleBotSender struct {
-	config    RuleBotConfig
-	store     *outputStore
-	file      *os.File
-	client    *http.Client
-	delivered *fingerprintSet
-	offset    int64
+	config     RuleBotConfig
+	store      *outputStore
+	file       *os.File
+	client     *http.Client
+	delivered  *fingerprintSet
+	offset     int64
+	pending    []ruleBotPending
+	pauseUntil time.Time
 }
 
 func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
@@ -146,6 +164,17 @@ func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore,
 			return fail(err)
 		}
 	}
+	for _, pending := range state.Pending {
+		if pending.Offset > 0 {
+			var previous [1]byte
+			if _, err := file.ReadAt(previous[:], pending.Offset-1); err != nil || previous[0] != '\n' {
+				return fail(errors.New("Rule-Bot pending offset is not on a line boundary"))
+			}
+		}
+		if _, _, ready, err := readDurableDomain(file, pending.Offset, state.Offset); err != nil || !ready {
+			return fail(errors.New("Rule-Bot pending offset does not reference a complete domain"))
+		}
+	}
 	cachePath := cfg.StateFile + ".dedupe-cache"
 	if len(configuredCachePath) != 0 && configuredCachePath[0] != "" {
 		cachePath = configuredCachePath[0]
@@ -172,7 +201,9 @@ func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore,
 				return http.ErrUseLastResponse
 			},
 		},
-		offset: state.Offset,
+		offset:     state.Offset,
+		pending:    state.Pending,
+		pauseUntil: state.PauseUntil,
 	}, nil
 }
 
@@ -245,16 +276,43 @@ func (s *ruleBotSender) Close() error {
 }
 
 func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
+	retryTurn := true
 	for {
-		durable := s.store.DurableSize()
-		if s.offset >= durable {
-			if !waitForRuleBot(ctx, 250*time.Millisecond) {
+		if ctx.Err() != nil {
+			return nil
+		}
+		now := time.Now()
+		if now.Before(s.pauseUntil) {
+			if !waitForRuleBot(ctx, min(250*time.Millisecond, s.pauseUntil.Sub(now))) {
 				return nil
 			}
 			continue
 		}
-
-		rawDomain, nextOffset, ready, err := readDurableDomain(s.file, s.offset, durable)
+		durable := s.store.DurableSize()
+		fresh := s.offset < durable && len(s.pending) < maxRuleBotPending
+		retryIndex := -1
+		wait := 250 * time.Millisecond
+		for index, pending := range s.pending {
+			if !pending.NextAttempt.After(now) {
+				if retryIndex < 0 || pending.NextAttempt.Before(s.pending[retryIndex].NextAttempt) {
+					retryIndex = index
+				}
+			} else {
+				wait = min(wait, pending.NextAttempt.Sub(now))
+			}
+		}
+		if !fresh && retryIndex < 0 {
+			if !waitForRuleBot(ctx, wait) {
+				return nil
+			}
+			continue
+		}
+		retrying := retryIndex >= 0 && (!fresh || retryTurn)
+		offset := s.offset
+		if retrying {
+			offset = s.pending[retryIndex].Offset
+		}
+		rawDomain, nextOffset, ready, err := readDurableDomain(s.file, offset, durable)
 		if err != nil {
 			return err
 		}
@@ -269,75 +327,84 @@ func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
 			return fmt.Errorf("apply Rule-Bot privacy policy: %w", err)
 		}
 		if domain == "" {
-			logger.Printf(
-				"INFO rule_bot domain_ref=%s local_status=%s",
-				domainReference(rawDomain),
-				localStatus,
-			)
-		} else if added, err := s.delivered.Add(domain); err != nil {
-			return fmt.Errorf("index delivered Rule-Bot domain: %w", err)
-		} else if !added {
-			logger.Printf(
-				"INFO rule_bot domain_ref=%s local_status=duplicate_registrable_domain",
-				domainReference(domain),
-			)
-		} else if err := s.deliverUntilTerminal(ctx, logger, domain); err != nil {
-			return err
+			logger.Printf("INFO rule_bot domain_ref=%s local_status=%s", domainReference(rawDomain), localStatus)
+		} else if !retrying {
+			added, err := s.delivered.Add(domain)
+			if err != nil {
+				return fmt.Errorf("index delivered Rule-Bot domain: %w", err)
+			}
+			if !added {
+				logger.Printf("INFO rule_bot domain_ref=%s local_status=duplicate_registrable_domain", domainReference(domain))
+				domain = ""
+			}
+		}
+		var deliveryErr error
+		if domain != "" {
+			_, deliveryErr = s.attempt(ctx, logger, domain)
 		}
 		if ctx.Err() != nil {
 			return nil
 		}
-		state := ruleBotState{Version: ruleBotStateVersion, Offset: nextOffset}
+		if deliveryErr != nil {
+			delay := s.config.Retry.InitialDelay.Value()
+			if retrying {
+				delay = s.pending[retryIndex].Delay * 2
+			}
+			if delay <= 0 {
+				delay = 2 * time.Second
+			}
+			maxDelay := s.config.Retry.MaxDelay.Value()
+			if maxDelay <= 0 {
+				maxDelay = 5 * time.Minute
+			}
+			maxDelay = min(maxDelay, 24*time.Hour)
+			delay = min(delay, maxDelay)
+			retryIn := jitter(delay)
+			var failure *ruleBotDeliveryError
+			if errors.As(deliveryErr, &failure) {
+				retryIn = max(retryIn, failure.retryAfter)
+				// Endpoint failures pause the sender instead of spending its budget
+				// on every queued domain. An application 503 is deferred individually.
+				if failure.auth || failure.statusCode == http.StatusTooManyRequests || failure.status != "temporary_error" {
+					if failure.auth || failure.statusCode == http.StatusTooManyRequests {
+						retryIn = max(retryIn, 30*time.Second)
+					}
+					s.pauseUntil = time.Now().Add(retryIn)
+				}
+			}
+			pending := ruleBotPending{Offset: offset, NextAttempt: time.Now().UTC().Add(retryIn), Delay: delay}
+			if retrying {
+				s.pending[retryIndex] = pending
+			} else {
+				s.pending = append(s.pending, pending)
+			}
+			logger.Printf("INFO rule_bot domain_ref=%s deferred=true retry_in=%s pending=%d", domainReference(domain), retryIn.Round(time.Millisecond), len(s.pending))
+		} else if retrying {
+			s.pending = append(s.pending[:retryIndex], s.pending[retryIndex+1:]...)
+		}
+		if retrying {
+			nextOffset = s.offset
+		}
+		state := ruleBotState{Version: ruleBotStateVersion, Offset: nextOffset, Pending: s.pending, PauseUntil: s.pauseUntil}
 		if err := writeRuleBotState(s.config.StateFile, state); err != nil {
 			return err
 		}
 		s.offset = nextOffset
+		retryTurn = !retrying
 	}
 }
 
-func (s *ruleBotSender) deliverUntilTerminal(ctx context.Context, logger *log.Logger, domain string) error {
-	delay := s.config.Retry.InitialDelay.Value()
-	maxDelay := s.config.Retry.MaxDelay.Value()
-	lastError := ""
-	lastErrorLog := time.Time{}
-	for {
-		status, err := s.deliver(ctx, domain)
-		if err == nil {
-			logger.Printf(
-				"INFO rule_bot domain_ref=%s status=%s",
-				domainReference(domain),
-				status,
-			)
-			return nil
-		}
-		if ctx.Err() != nil {
-			return nil
-		}
-		errorText := ruleBotDeliveryLogReason(err)
-		if errorText != lastError || time.Since(lastErrorLog) >= 5*time.Minute {
-			logger.Printf(
-				"WARN rule_bot domain_ref=%s delivery_failed=%s",
-				domainReference(domain),
-				errorText,
-			)
-			lastError = errorText
-			lastErrorLog = time.Now()
-		}
-		wait := jitter(delay)
-		var deliveryError *ruleBotDeliveryError
-		if errors.As(err, &deliveryError) && deliveryError.auth && wait < 30*time.Second {
-			wait = 30 * time.Second
-		}
-		if !waitForRuleBot(ctx, wait) {
-			return nil
-		}
-		if delay < maxDelay {
-			delay *= 2
-			if delay > maxDelay {
-				delay = maxDelay
-			}
-		}
+func (s *ruleBotSender) attempt(ctx context.Context, logger *log.Logger, domain string) (string, error) {
+	status, err := s.deliver(ctx, domain)
+	if ctx.Err() != nil {
+		return status, err
 	}
+	if err != nil {
+		logger.Printf("WARN rule_bot domain_ref=%s delivery_failed=%s", domainReference(domain), ruleBotDeliveryLogReason(err))
+	} else {
+		logger.Printf("INFO rule_bot domain_ref=%s status=%s", domainReference(domain), status)
+	}
+	return status, err
 }
 
 func ruleBotDeliveryLogReason(err error) string {
@@ -393,28 +460,47 @@ func (s *ruleBotSender) deliver(ctx context.Context, domain string) (string, err
 		return "", &ruleBotDeliveryError{err: err}
 	}
 	defer response.Body.Close()
+	failure := &ruleBotDeliveryError{
+		statusCode: response.StatusCode,
+		retryAfter: ruleBotRetryAfter(response.Header.Get("Retry-After"), time.Now()),
+		auth:       response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden,
+	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, 4097))
 	if err != nil {
-		return "", &ruleBotDeliveryError{statusCode: response.StatusCode, err: fmt.Errorf("read response: %w", err)}
+		failure.err = fmt.Errorf("read response: %w", err)
+		return "", failure
 	}
 	if len(data) > 4096 {
-		return "", &ruleBotDeliveryError{statusCode: response.StatusCode, err: errors.New("response exceeds 4096 bytes")}
+		failure.err = errors.New("response exceeds 4096 bytes")
+		return "", failure
 	}
 	var result ruleBotResponse
 	if err := json.Unmarshal(data, &result); err != nil {
-		return "", &ruleBotDeliveryError{statusCode: response.StatusCode, err: errors.New("invalid JSON response")}
+		failure.err = errors.New("invalid JSON response")
+		return "", failure
 	}
+	failure.status = result.Status
 	if result.Version != 1 {
-		return "", &ruleBotDeliveryError{statusCode: response.StatusCode, status: result.Status, err: errors.New("unsupported response version")}
+		failure.err = errors.New("unsupported response version")
+		return "", failure
 	}
 	if _, terminal := terminalRuleBotStatuses[result.Status]; terminal && ruleBotStatusCodeMatches(result.Status, response.StatusCode) {
+		if result.Status == "rejected_policy" && result.Deferred {
+			return "deferred_dns", nil
+		}
 		return result.Status, nil
 	}
-	return "", &ruleBotDeliveryError{
-		statusCode: response.StatusCode,
-		status:     result.Status,
-		auth:       response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden,
+	return "", failure
+}
+
+func ruleBotRetryAfter(value string, now time.Time) time.Duration {
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 {
+		return time.Duration(min(seconds, int64(86400))) * time.Second
 	}
+	if date, err := http.ParseTime(value); err == nil {
+		return min(max(date.Sub(now), 0), 24*time.Hour)
+	}
+	return 0
 }
 
 func ruleBotStatusCodeMatches(status string, statusCode int) bool {
@@ -456,12 +542,12 @@ func loadRuleBotState(path string) (ruleBotState, bool, error) {
 		return ruleBotState{}, false, fmt.Errorf("open Rule-Bot state: %w", err)
 	}
 	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, 4097))
+	data, err := io.ReadAll(io.LimitReader(file, maxRuleBotStateBytes+1))
 	if err != nil {
 		return ruleBotState{}, false, fmt.Errorf("read Rule-Bot state: %w", err)
 	}
-	if len(data) > 4096 {
-		return ruleBotState{}, false, errors.New("Rule-Bot state exceeds 4096 bytes")
+	if len(data) > maxRuleBotStateBytes {
+		return ruleBotState{}, false, errors.New("Rule-Bot state exceeds size limit")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -473,8 +559,15 @@ func loadRuleBotState(path string) (ruleBotState, bool, error) {
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return ruleBotState{}, false, errors.New("decode Rule-Bot state: trailing data")
 	}
-	if state.Version != ruleBotStateVersion || state.Offset < 0 {
+	if (state.Version != 1 && state.Version != ruleBotStateVersion) || state.Offset < 0 || len(state.Pending) > maxRuleBotPending || (state.Version == 1 && len(state.Pending) != 0) {
 		return ruleBotState{}, false, errors.New("invalid Rule-Bot state")
+	}
+	seen := make(map[int64]bool, len(state.Pending))
+	for _, pending := range state.Pending {
+		if pending.Offset < 0 || pending.Offset >= state.Offset || pending.Delay <= 0 || pending.Delay > 24*time.Hour || pending.NextAttempt.IsZero() || seen[pending.Offset] {
+			return ruleBotState{}, false, errors.New("invalid Rule-Bot pending retry")
+		}
+		seen[pending.Offset] = true
 	}
 	return state, true, nil
 }

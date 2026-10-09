@@ -99,13 +99,26 @@ If a non-empty existing file lacks a final newline, Rule-Bot Client repairs it o
 when the last line is itself a complete valid domain. An invalid partial tail is
 reported and left untouched.
 
-When Rule-Bot delivery is enabled, its state is a byte offset in the append-only
-output. The sender never reads beyond the writer's most recent successful
-`fsync`. A terminal Rule-Bot response is followed by an atomic state-file
-replacement and directory synchronization before the next domain is attempted.
-Transient and authentication failures leave the offset unchanged. This gives
-at-least-once delivery; Rule-Bot's duplicate check makes replay after an
-acknowledgement/state-write crash safe.
+When Rule-Bot delivery is enabled, version-2 state contains a scan offset and
+at most 1,024 deferred output offsets with their retry deadlines and backoff.
+Version-1 checkpoints are read without discarding unsent records. The sender
+never reads beyond the writer's latest successful `fsync`. Each scan advance
+and its unresolved retry entry are committed together by atomic replacement
+and directory synchronization. A full retry queue pauses scanning; it never
+evicts unresolved records. Terminal acknowledgement removes the retry entry.
+Fresh records and due retries alternate so neither can starve the other.
+Transport, authentication and throttling failures pause the endpoint; an
+application `temporary_error` is deferred independently. `Retry-After` and
+endpoint pauses survive restarts. Retry metadata contains no domains or tokens.
+This gives at-least-once delivery; Rule-Bot's duplicate check makes replay after
+an acknowledgement/state-write crash safe. Downgrading requires restoring the
+pre-upgrade checkpoint, which may safely replay already accepted domains.
+
+A server-owned DNS deferral uses the legacy terminal `rejected_policy` status
+and an additional `deferred=true` field. Old clients continue without upgrades;
+new clients log `deferred_dns`. The server persists and retries that domain,
+so the client must not create a second retry owner. Runtime status reports
+`pending`, `unscanned_bytes` and `next_retry_at` for client-owned retries.
 
 ## Security
 
