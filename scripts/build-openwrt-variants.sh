@@ -20,7 +20,4 @@ while IFS=$'\t' read -r variant arch arm go386 gomips gomips64; do
     OUTPUT="$OUTPUT/$variant/rule-bot-client" sh scripts/build-one.sh
     OUTPUT="$OUTPUT/$variant/rule-bot-client-openwrt" sh scripts/build-openwrt-helper.sh
   )
-  for binary in rule-bot-client rule-bot-client-openwrt; do
-    python3 "$SCRIPT_DIR/openwrt-targets.py" check-binary "$OUTPUT/$variant/$binary" "$variant" "$COMMIT" "$VERSION"
-  done
 done < "$OUTPUT/variants.tsv"

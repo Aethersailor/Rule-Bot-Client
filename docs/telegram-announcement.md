@@ -18,7 +18,7 @@ Rule-Bot 可能返回已存在、GeoSite 已覆盖、无效或策略拒绝。只
 
 ⚠️ Rule-Bot Client 会观察设备或网络访问过的域名。共享网络使用前，应确认有权收集这些数据。成功添加的域名会写入服务方配置的 GitHub 仓库及提交历史；使用项目公共 Rule-Bot 时，这些内容会公开。
 
-正式发布流程包含 Go 测试、race 检查、容器烟测、多架构构建和 OpenWrt 软件包检查。当前版本、验证结果和已知限制以 GitHub Release 与 Actions 为准。
+项目由维护者人工测试，正式发布流程负责多架构构建、容器镜像和 OpenWrt 软件包发布。当前版本、构建结果和已知限制以 GitHub Release 与 Actions 为准。
 
 GitHub：
 https://github.com/Aethersailor/Rule-Bot-Client

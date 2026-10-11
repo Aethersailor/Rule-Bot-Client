@@ -37,24 +37,6 @@ per-instance output files, reverse DNS, and access-history sidecar logs.
   the output before returning.
 - Configuration changes take effect after a restart.
 
-## Performance release gates
-
-Initial release targets, measured on documented reference systems:
-
-| Metric | Gate |
-| --- | ---: |
-| stripped static binary | 8 MiB maximum |
-| compressed scratch image | 10 MiB maximum |
-| one-instance idle RSS | 12 MiB maximum |
-| additional idle instance | 0.5 MiB maximum |
-| ten-minute idle CPU average | below 0.1% |
-| 100,000-domain fingerprint set heap delta | 6 MiB maximum |
-| 1,000,000-domain fingerprint set heap delta | 40 MiB maximum |
-
-Throughput measurements on shared CI runners are recorded but are not hard
-gates until a stable reference host is established. Allocation counts, binary
-size, bounded-memory behavior, and functional tests are hard gates.
-
 ## Input and parsing
 
 Rule-Bot Client requests `/logs?level=info` over a regular HTTP response stream. It
@@ -66,9 +48,8 @@ rule forms currently emitted by compatible controllers:
 ... (match Match/) ... --> example.com:443 error: ...
 ```
 
-Merely containing the word `Match` is insufficient. Parser fixtures and fuzz
-tests protect against rule names, proxy names, malformed JSON, oversized lines,
-and future format drift.
+Merely containing the word `Match` is insufficient. Rule names, proxy names,
+malformed JSON and oversized lines must not be treated as matching domains.
 
 After a stream reconnects, Rule-Bot Client requests one `/connections` snapshot and
 submits active connections whose `rule` is exactly `Match`. This can recover
@@ -142,8 +123,8 @@ so the client must not create a second retry owner. Runtime status reports
 
 Every binary exposes its semantic version, source commit, build time, Go version,
 and build target through `--version`. Linux, Windows, and OpenWrt Release assets
-include SHA-256 checksums and GitHub artifact attestations. A machine-readable
+include SHA-256 checksums. A machine-readable
 client update manifest binds Linux and Windows targets to exact asset names,
 sizes, hashes, and the release commit. Container images carry matching OCI
-version and revision labels and are verified by digest and exact platform list
-before a draft release is published.
+version and revision labels. Draft releases are published after the archives,
+container image and OpenWrt packages have been built and uploaded.

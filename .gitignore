@@ -1,5 +1,2 @@
 /bin/
 /dist/
-/coverage.out
-*.test
-*.prof

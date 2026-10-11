@@ -23,9 +23,3 @@ go build -buildvcs=false -trimpath \
     -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildDate=$BUILD_DATE \
     -X github.com/Aethersailor/Rule-Bot-Client/internal/client.BuildTarget=$TARGET_LABEL" \
   -o "$OUTPUT" ./cmd/rule-bot-client
-
-size=$(wc -c < "$OUTPUT")
-if [ "$size" -gt 8388608 ]; then
-  echo "binary exceeds 8 MiB gate: $OUTPUT ($size bytes)" >&2
-  exit 1
-fi

@@ -2,13 +2,9 @@
 .github
 bin
 dist
-coverage.out
-*.test
-*.prof
 deploy
 openwrt
 scripts
 *.md
 LICENSE
 Makefile
-**/*_test.go

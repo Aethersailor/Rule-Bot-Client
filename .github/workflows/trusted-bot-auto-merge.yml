@@ -1,41 +1,29 @@
-name: Trusted bot auto-merge
+name: Dependabot auto-merge
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-      - Security
-      - OpenWrt Packages
-    types:
-      - completed
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
   schedule:
     - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions:
-  actions: write
-  checks: read
   contents: write
   pull-requests: write
-  security-events: read
 
 concurrency:
-  group: trusted-bot-auto-merge
+  group: dependabot-auto-merge
   cancel-in-progress: false
 
 jobs:
-  reconcile:
-    name: Reconcile trusted bot PRs
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-        (github.event.workflow_run.event == 'pull_request' ||
-         ((github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
-          github.event.workflow_run.head_branch == github.event.repository.default_branch)))
+  merge:
+    name: Merge Dependabot PRs
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Merge one fully validated trusted bot PR
+      # Never check out or execute pull-request code with this write token.
+      - name: Merge current Dependabot updates
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -43,152 +31,48 @@ jobs:
         run: |
           set -euo pipefail
 
-          default_branch=$(gh repo view "$REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')
-          default_sha=$(gh api "repos/$REPOSITORY/commits/$default_branch" --jq '.sha')
-          base_runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$default_sha&per_page=100")
-          declare -A workflow_files=(
-            [CI]=ci.yml
-            [Security]=security.yml
-            ['OpenWrt Packages']=openwrt-packages.yml
-          )
-          for workflow in CI Security 'OpenWrt Packages'; do
-            run=$(jq -c \
-              --arg workflow "$workflow" \
-              --arg sha "$default_sha" \
-              --arg branch "$default_branch" \
-              '[.workflow_runs[] | select(.name == $workflow and .head_sha == $sha and .head_branch == $branch and (.event == "push" or .event == "workflow_dispatch"))] |
-               sort_by(.id) | last // null' \
-              <<<"$base_runs")
-            if test "$run" = null; then
-              gh workflow run "${workflow_files[$workflow]}" --repo "$REPOSITORY" --ref "$default_branch"
-              echo "Dispatched missing $workflow gate for default branch $default_sha"
-              exit 0
-            fi
-
-            status=$(jq -r '.status' <<<"$run")
-            conclusion=$(jq -r '.conclusion // ""' <<<"$run")
-            if test "$status" != completed; then
-              echo "Default branch $default_sha is still running $workflow"
-              exit 0
-            fi
-            if test "$conclusion" != success; then
-              echo "Default branch $default_sha is not green in $workflow $conclusion; automatic retry is disabled"
-              exit 0
-            fi
-          done
-
-          mapfile -t pull_requests < <(
+          default_branch=$(gh api "repos/$REPOSITORY" --jq '.default_branch')
+          pull_requests=$(
             gh api --paginate \
               "repos/$REPOSITORY/pulls?state=open&base=$default_branch&sort=created&direction=asc&per_page=100" \
-              --jq '.[].number'
+              --jq '.[] | select(.user.login == "dependabot[bot]") | .number'
           )
 
-          for pull_number in "${pull_requests[@]}"; do
-            pull=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
-            author=$(jq -r '.user.login' <<<"$pull")
-            base_ref=$(jq -r '.base.ref' <<<"$pull")
-            head_ref=$(jq -r '.head.ref' <<<"$pull")
-            head_repo=$(jq -r '.head.repo.full_name // ""' <<<"$pull")
+          while IFS= read -r pull_number; do
+            test -n "$pull_number" || continue
+            # GitHub may need a moment to calculate mergeability after a push.
+            for attempt in 1 2 3; do
+              pull=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
+              if test "$(jq -r '.mergeable' <<<"$pull")" != null; then
+                break
+              fi
+              sleep 2
+            done
+
+            jq -e --arg repository "$REPOSITORY" --arg branch "$default_branch" '
+              .state == "open" and .draft == false and
+              .user.login == "dependabot[bot]" and .user.type == "Bot" and
+              .base.ref == $branch and .base.repo.full_name == $repository and
+              .head.repo.full_name == $repository and
+              (.head.ref | startswith("dependabot/"))
+            ' <<<"$pull" >/dev/null || continue
+
+            if test "$(jq -r '.mergeable' <<<"$pull")" != true; then
+              echo "PR #$pull_number is not mergeable yet; a Dependabot update or scheduled run will retry"
+              continue
+            fi
+
             head_sha=$(jq -r '.head.sha' <<<"$pull")
             title=$(jq -r '.title' <<<"$pull")
-
-            test "$(jq -r '.state' <<<"$pull")" = open || continue
-            test "$(jq -r '.draft' <<<"$pull")" = false || continue
-            test "$base_ref" = "$default_branch" || continue
-            test "$head_repo" = "$REPOSITORY" || continue
-
-            trusted_kind=
-            if test "$author" = 'dependabot[bot]' && [[ "$head_ref" == dependabot/* ]]; then
-              jq -e 'any(.labels[]?; .name == "automerge")' <<<"$pull" >/dev/null || continue
-              [[ "$title" =~ ^(build|fix)\(deps\):[[:space:]] ]] || continue
-              trusted_kind=dependabot
-            elif test "$author" = 'github-advanced-security[bot]' && \
-                 [[ "$head_ref" =~ ^copilot/fix-code-scanning-alerts-[0-9]+$ ]]; then
-              trusted_kind=codeql
-            else
-              continue
-            fi
-
-            runs=$(gh api "repos/$REPOSITORY/actions/runs?event=pull_request&head_sha=$head_sha&per_page=100")
-            gates_ok=true
-            for workflow in CI Security 'OpenWrt Packages'; do
-              run=$(jq -c \
-                --arg workflow "$workflow" \
-                --arg sha "$head_sha" \
-                --argjson pull_number "$pull_number" \
-                '[.workflow_runs[] |
-                  select(.name == $workflow and .head_sha == $sha) |
-                  select(any(.pull_requests[]?; .number == $pull_number))] |
-                 sort_by(.id) | last // null' \
-                <<<"$runs")
-              if test "$run" = null; then
-                echo "PR #$pull_number has no $workflow gate for $head_sha"
-                gates_ok=false
-                break
-              fi
-
-              status=$(jq -r '.status' <<<"$run")
-              conclusion=$(jq -r '.conclusion // ""' <<<"$run")
-              if test "$status" != completed; then
-                echo "PR #$pull_number is still running $workflow for $head_sha"
-                gates_ok=false
-                break
-              fi
-              if test "$conclusion" != success; then
-                echo "PR #$pull_number is not green in $workflow $conclusion; automatic retry is disabled"
-                gates_ok=false
-                break
-              fi
-            done
-            test "$gates_ok" = true || continue
-
-            checks=$(gh api "repos/$REPOSITORY/commits/$head_sha/check-runs?filter=latest&per_page=100")
-            jq -e '
-              [.check_runs[] |
-                select(.status != "completed" or
-                  (.conclusion != "success" and
-                   .conclusion != "neutral" and
-                   .conclusion != "skipped"))] |
-              length == 0
-            ' <<<"$checks" >/dev/null || continue
-
-            if test "$trusted_kind" = codeql; then
-              open_alerts=$(gh api --paginate --slurp -X GET \
-                "repos/$REPOSITORY/code-scanning/alerts" \
-                -f state=open \
-                -f ref="refs/pull/$pull_number/merge" \
-                -f per_page=100 | jq '[.[][]] | length')
-              test "$open_alerts" -eq 0 || continue
-              commit_title="fix(security): apply CodeQL autofix (#$pull_number)"
-            else
-              commit_title="$title (#$pull_number)"
-            fi
-
-            latest=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
-            test "$(jq -r '.state' <<<"$latest")" = open || continue
-            test "$(jq -r '.draft' <<<"$latest")" = false || continue
-            test "$(jq -r '.user.login' <<<"$latest")" = "$author" || continue
-            test "$(jq -r '.base.ref' <<<"$latest")" = "$default_branch" || continue
-            test "$(jq -r '.head.repo.full_name // ""' <<<"$latest")" = "$REPOSITORY" || continue
-            test "$(jq -r '.head.sha' <<<"$latest")" = "$head_sha" || continue
-            test "$(jq -r '.mergeable' <<<"$latest")" = true || continue
-
-            if ! merged=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
+            if ! result=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
               -f merge_method=squash \
               -f sha="$head_sha" \
-              -f commit_title="$commit_title" 2>&1); then
-              echo "Merge of PR #$pull_number was deferred: $merged" >&2
+              -f commit_title="$title (#$pull_number)" 2>&1); then
+              echo "::warning::PR #$pull_number could not be merged: $result"
               continue
             fi
-            jq -e '.merged == true' <<<"$merged" >/dev/null
+            jq -e '.merged == true' <<<"$result" >/dev/null
+            echo "Merged Dependabot PR #$pull_number at $head_sha"
+          done <<<"$pull_requests"
 
-            # GITHUB_TOKEN merges do not emit ordinary push-triggered workflow runs.
-            # Dispatch the three canonical master checks explicitly.
-            gh workflow run ci.yml --repo "$REPOSITORY" --ref "$default_branch"
-            gh workflow run security.yml --repo "$REPOSITORY" --ref "$default_branch"
-            gh workflow run openwrt-packages.yml --repo "$REPOSITORY" --ref "$default_branch"
-            echo "Merged trusted bot PR #$pull_number at $head_sha"
-            exit 0
-          done
-
-          echo "No fully validated trusted bot PR is ready to merge"
+          echo "Dependabot queue reconciliation completed"

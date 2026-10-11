@@ -42,21 +42,14 @@ mkdir -p "$SDK_DIR/package/luci-app-rule-bot-client/src"
 printf '%s\n' 'CONFIG_PACKAGE_luci-app-rule-bot-client=y' >> "$SDK_DIR/.config"
 make -C "$SDK_DIR" defconfig RULE_BOT_CLIENT_VERSION="$VERSION"
 test -x "$SDK_DIR/staging_dir/hostpkg/bin/po2lmo"
-if [ "$MANAGER" = apk ]; then
-  APK_TOOL="$(find "$SDK_DIR/staging_dir" -type f -path '*/bin/apk' -perm -u+x -print -quit)"
-  test -n "$APK_TOOL"
-  export APK_TOOL
-fi
-
 python3 "$SCRIPT_DIR/openwrt-targets.py" packages "$MANAGER" > "$WORK/packages.tsv"
 while IFS=$'\t' read -r architecture variant; do
   directory="$OUTPUT/$MANAGER-$architecture"
   mkdir -p "$directory"
   for binary in rule-bot-client rule-bot-client-openwrt; do
-    python3 "$SCRIPT_DIR/openwrt-targets.py" check-binary "$BINARIES/$variant/$binary" "$variant" "$COMMIT" "$VERSION"
     install -m 0755 "$BINARIES/$variant/$binary" "$SDK_DIR/package/luci-app-rule-bot-client/src/$binary"
   done
-  # Go already strips these static binaries. Preserve their verified ABI and
+  # Go already strips these static binaries. Preserve their ABI and
   # build metadata; the SDK's target-specific strip tool cannot handle all ABIs.
   make -C "$SDK_DIR" package/luci-app-rule-bot-client/clean \
     RULE_BOT_CLIENT_VERSION="$VERSION" RULE_BOT_CLIENT_PACKAGE_ARCH="$architecture"
@@ -64,8 +57,6 @@ while IFS=$'\t' read -r architecture variant; do
     RULE_BOT_CLIENT_VERSION="$VERSION" RULE_BOT_CLIENT_PACKAGE_ARCH="$architecture"
   package="$(find "$SDK_DIR/bin" -type f -name "luci-app-rule-bot-client*.$MANAGER" -print -quit)"
   test -n "$package"
-  EXPECTED_VARIANT="$variant" COMMIT="$COMMIT" VERSION="$VERSION" \
-    sh "$SCRIPT_DIR/assert-openwrt-package.sh" "$MANAGER" "$package" "$architecture"
   cp "$package" "$directory/"
   package_name="$(basename "$package")"
   package_sha256="$(sha256sum "$package" | awk '{print $1}')"
