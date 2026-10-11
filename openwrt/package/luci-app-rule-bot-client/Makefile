@@ -20,7 +20,7 @@ define Package/luci-app-rule-bot-client
 endef
 
 ifneq ($(RULE_BOT_CLIENT_PACKAGE_ARCH),)
-# Batch releases install already-stripped, ABI-verified static Go executables.
+# Batch releases install prebuilt, already-stripped static Go executables.
 # Keep their build metadata and never run a foreign target strip tool on them.
 RSTRIP:=:
 endif
