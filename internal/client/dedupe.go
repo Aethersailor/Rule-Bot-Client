@@ -13,17 +13,15 @@ import (
 const (
 	maxInMemoryFingerprints = 64 * 1024
 	fingerprintSlotSize     = int64(17)
-	minimumFingerprintSlots = int64(128 * 1024)
+	initialFingerprintSlots = int64(2 * maxInMemoryFingerprints)
 )
 
 type fingerprint [16]byte
 
 type fingerprintSet struct {
-	entries      map[fingerprint]struct{}
-	table        *diskFingerprintTable
-	cachePath    string
-	capacityHint int
-	length       int
+	entries   map[fingerprint]struct{}
+	table     *diskFingerprintTable
+	cachePath string
 }
 
 type diskFingerprintTable struct {
@@ -34,18 +32,10 @@ type diskFingerprintTable struct {
 	count    int
 }
 
-func newFingerprintSetAt(capacity int, cachePath string) *fingerprintSet {
-	if capacity < 0 {
-		capacity = 0
-	}
-	mapCapacity := capacity
-	if mapCapacity > maxInMemoryFingerprints {
-		mapCapacity = maxInMemoryFingerprints
-	}
+func newFingerprintSet(cachePath string) *fingerprintSet {
 	return &fingerprintSet{
-		entries:      make(map[fingerprint]struct{}, mapCapacity),
-		cachePath:    cachePath,
-		capacityHint: capacity,
+		entries:   make(map[fingerprint]struct{}, 1024),
+		cachePath: cachePath,
 	}
 }
 
@@ -54,40 +44,23 @@ func (s *fingerprintSet) Add(domain string) (bool, error) {
 	var key fingerprint
 	copy(key[:], sum[:len(key)])
 	if s.table != nil {
-		added, err := s.table.add(key)
-		if added {
-			s.length++
-		}
-		return added, err
+		return s.table.add(key)
 	}
 	if _, exists := s.entries[key]; exists {
 		return false, nil
 	}
 	if len(s.entries) < maxInMemoryFingerprints {
 		s.entries[key] = struct{}{}
-		s.length++
 		return true, nil
 	}
 	if err := s.spill(); err != nil {
 		return false, err
 	}
-	added, err := s.table.add(key)
-	if added {
-		s.length++
-	}
-	return added, err
+	return s.table.add(key)
 }
 
 func (s *fingerprintSet) spill() error {
-	expected := s.length + 1
-	if s.capacityHint > expected {
-		expected = s.capacityHint
-	}
-	capacity, err := fingerprintTableCapacity(expected)
-	if err != nil {
-		return err
-	}
-	table, err := createDiskFingerprintTable(s.cachePath, capacity)
+	table, err := createDiskFingerprintTable(s.cachePath)
 	if err != nil {
 		return fmt.Errorf("create deduplication cache: %w", err)
 	}
@@ -102,38 +75,11 @@ func (s *fingerprintSet) spill() error {
 	return nil
 }
 
-func fingerprintTableCapacity(entries int) (int64, error) {
-	if entries < 1 {
-		entries = 1
+func createDiskFingerprintTable(path string) (*diskFingerprintTable, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
 	}
-	if uint64(entries) > uint64(math.MaxInt64/10) {
-		return 0, errors.New("deduplication cache is too large")
-	}
-	capacity := minimumFingerprintSlots
-	for int64(entries)*10 > capacity*7 {
-		if capacity > math.MaxInt64/2 {
-			return 0, errors.New("deduplication cache is too large")
-		}
-		capacity *= 2
-	}
-	return capacity, nil
-}
-
-func createDiskFingerprintTable(path string, capacity int64) (*diskFingerprintTable, error) {
-	var (
-		file *os.File
-		err  error
-	)
-	if path == "" {
-		file, err = os.CreateTemp("", "rule-bot-client-dedupe-*")
-		if err == nil {
-			path = file.Name()
-		}
-	} else {
-		if err = os.MkdirAll(filepath.Dir(path), 0o750); err == nil {
-			file, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o600)
-		}
-	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -142,17 +88,14 @@ func createDiskFingerprintTable(path string, capacity int64) (*diskFingerprintTa
 		_ = os.Remove(path)
 		return nil, failure
 	}
-	size, err := fingerprintTableBytes(capacity)
-	if err != nil {
-		return fail(err)
-	}
+	size := initialFingerprintSlots * fingerprintSlotSize
 	if err := ensureStorageReserve(path, size); err != nil {
 		return fail(err)
 	}
 	if err := file.Truncate(size); err != nil {
 		return fail(err)
 	}
-	return &diskFingerprintTable{file: file, path: path, capacity: capacity}, nil
+	return &diskFingerprintTable{file: file, path: path, capacity: initialFingerprintSlots}, nil
 }
 
 func fingerprintTableBytes(capacity int64) (int64, error) {
@@ -272,7 +215,12 @@ func (t *diskFingerprintTable) grow() error {
 	return nil
 }
 
-func (s *fingerprintSet) Len() int { return s.length }
+func (s *fingerprintSet) Len() int {
+	if s.table != nil {
+		return s.table.count
+	}
+	return len(s.entries)
+}
 
 func (s *fingerprintSet) Close() error {
 	if s.table == nil {

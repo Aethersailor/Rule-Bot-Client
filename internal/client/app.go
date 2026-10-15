@@ -141,9 +141,7 @@ func Run(ctx context.Context, cfg Config, logger *log.Logger) error {
 			if !added {
 				continue
 			}
-			if reporter != nil {
-				reporter.acceptedDomain()
-			}
+			reporter.acceptedDomain()
 			select {
 			case writes <- domain:
 			case <-writerDone:
@@ -241,9 +239,7 @@ func runInstance(ctx context.Context, instance *controllerInstance, cfg Config, 
 	submit := func(domain string) bool {
 		select {
 		case candidates <- domain:
-			if reporter != nil {
-				reporter.event(instance.config.Name)
-			}
+			reporter.event(instance.config.Name)
 			return true
 		case <-ctx.Done():
 			return false
@@ -252,9 +248,7 @@ func runInstance(ctx context.Context, instance *controllerInstance, cfg Config, 
 	for {
 		body, err := instance.openLogs(ctx)
 		if err == nil {
-			if reporter != nil {
-				reporter.connected(instance.config.Name)
-			}
+			reporter.connected(instance.config.Name)
 			if outageStarted.IsZero() {
 				logger.Printf("INFO instance=%s connected url=%s", instance.config.Name, instance.config.URL)
 			} else {
@@ -309,9 +303,7 @@ func runInstance(ctx context.Context, instance *controllerInstance, cfg Config, 
 			wait = 30 * time.Second
 		}
 		errorText := err.Error()
-		if reporter != nil {
-			reporter.disconnected(instance.config.Name, err, wait)
-		}
+		reporter.disconnected(instance.config.Name, err, wait)
 		if errorText != lastError || time.Since(lastErrorLog) >= 5*time.Minute {
 			logger.Printf(
 				"WARN instance=%s disconnected error=%v retry_in=%s attempt=%d",

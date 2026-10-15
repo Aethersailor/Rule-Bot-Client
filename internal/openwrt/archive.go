@@ -246,6 +246,7 @@ func parseBackup(archive []byte) (parsedBackup, error) {
 	if err != nil {
 		return result, errors.New("archive is not gzip")
 	}
+	defer gzipReader.Close()
 	gzipReader.Multistream(false)
 	reader := tar.NewReader(gzipReader)
 	total := int64(0)
@@ -256,27 +257,22 @@ func parseBackup(archive []byte) (parsedBackup, error) {
 			break
 		}
 		if err != nil {
-			_ = gzipReader.Close()
 			return result, err
 		}
 		name := filepath.ToSlash(filepath.Clean(header.Name))
 		if header.Typeflag != tar.TypeReg || strings.HasPrefix(name, "/") || strings.Contains(name, "../") || !allowedBackupName(name) {
-			_ = gzipReader.Close()
 			return result, fmt.Errorf("unsafe restore entry %q", header.Name)
 		}
 		if _, exists := seen[name]; exists {
-			_ = gzipReader.Close()
 			return result, fmt.Errorf("duplicate restore entry %q", header.Name)
 		}
 		seen[name] = struct{}{}
 		if header.Size < 0 || header.Size > int64(maxBackupBytes)-total {
-			_ = gzipReader.Close()
 			return result, errors.New("unpacked restore exceeds 4 MiB")
 		}
 		total += header.Size
 		data, err := io.ReadAll(io.LimitReader(reader, header.Size+1))
 		if err != nil || int64(len(data)) != header.Size {
-			_ = gzipReader.Close()
 			return result, errors.New("truncated restore entry")
 		}
 		if strings.HasPrefix(name, "active-data/") {
@@ -293,16 +289,13 @@ func parseBackup(archive []byte) (parsedBackup, error) {
 	}
 	trailing, err := io.ReadAll(io.LimitReader(gzipReader, maxBackupBytes+1))
 	if err != nil {
-		_ = gzipReader.Close()
 		return result, err
 	}
 	if len(trailing) > maxBackupBytes {
-		_ = gzipReader.Close()
 		return result, errors.New("unpacked restore exceeds 4 MiB")
 	}
 	for _, value := range trailing {
 		if value != 0 {
-			_ = gzipReader.Close()
 			return result, errors.New("archive contains trailing data")
 		}
 	}

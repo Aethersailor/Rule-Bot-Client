@@ -80,13 +80,11 @@ func splitUCIWords(line string) ([]string, error) {
 			break
 		}
 		var word strings.Builder
-		started := false
 		for index < len(line) {
 			char := line[index]
 			if char == ' ' || char == '\t' || char == '#' {
 				break
 			}
-			started = true
 			switch char {
 			case '\'', '"':
 				quote := char
@@ -119,15 +117,7 @@ func splitUCIWords(line string) ([]string, error) {
 				index++
 			}
 		}
-		if started {
-			words = append(words, word.String())
-		}
-		for index < len(line) && line[index] != '#' && (line[index] == ' ' || line[index] == '\t') {
-			index++
-		}
-		if index < len(line) && line[index] == '#' {
-			break
-		}
+		words = append(words, word.String())
 	}
 	return words, nil
 }

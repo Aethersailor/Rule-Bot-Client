@@ -88,7 +88,7 @@ func loadExistingDomains(file *os.File, cachePath string) (*fingerprintSet, bool
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, false, fmt.Errorf("seek output: %w", err)
 	}
-	set := newFingerprintSetAt(1024, cachePath)
+	set := newFingerprintSet(cachePath)
 	fail := func(err error) (*fingerprintSet, bool, error) {
 		_ = set.Close()
 		return nil, false, err

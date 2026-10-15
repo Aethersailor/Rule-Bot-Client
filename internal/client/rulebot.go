@@ -237,7 +237,7 @@ func buildRuleBotTransport(cfg RuleBotConfig) (*http.Transport, error) {
 }
 
 func loadDeliveredRuleBotDomains(file *os.File, offset int64, cfg RuleBotConfig, cachePath string) (*fingerprintSet, error) {
-	delivered := newFingerprintSetAt(1024, cachePath)
+	delivered := newFingerprintSet(cachePath)
 	fail := func(err error) (*fingerprintSet, error) {
 		_ = delivered.Close()
 		return nil, err

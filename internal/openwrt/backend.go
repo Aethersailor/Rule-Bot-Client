@@ -83,7 +83,7 @@ func (b Backend) Dispatch(ctx context.Context, action string, payload []byte) (a
 		if request.Confirm != "CLEAR" {
 			return nil, errors.New("clear requires exact confirmation")
 		}
-		return b.clear(ctx)
+		return b.clear()
 	case "logs":
 		return b.logs()
 	case "service":
@@ -464,13 +464,13 @@ func (b Backend) checkConfig(ctx context.Context) error {
 }
 
 func (b Backend) runService(action string) error {
-	if b.Testing || (b.Root != "" && b.Root != "/") {
-		return nil
-	}
 	switch action {
 	case "start", "stop", "restart", "reload":
 	default:
 		return errors.New("invalid service action")
+	}
+	if b.Testing || (b.Root != "" && b.Root != "/") {
+		return nil
 	}
 	output, err := exec.Command("/etc/init.d/rule-bot-client", action).CombinedOutput()
 	if err != nil {
@@ -660,7 +660,7 @@ func (b Backend) outputPath() (string, error) {
 	return rooted(b.Root, filepath.ToSlash(filepath.Join(dataDir, "domains.txt"))), nil
 }
 
-func (b Backend) clear(ctx context.Context) (map[string]any, error) {
+func (b Backend) clear() (map[string]any, error) {
 	settings, err := LoadSettings(b.Root)
 	if err != nil {
 		return nil, err
@@ -719,11 +719,6 @@ func (b Backend) logs() (map[string]any, error) {
 }
 
 func (b Backend) service(action string) (map[string]any, error) {
-	switch action {
-	case "start", "stop", "restart", "reload":
-	default:
-		return nil, errors.New("invalid service action")
-	}
 	if err := b.runService(action); err != nil {
 		return nil, err
 	}

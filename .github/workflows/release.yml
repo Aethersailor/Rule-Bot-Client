@@ -156,8 +156,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest || steps.reconcile.outputs.digest }}
     steps:
       - name: Check out release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -215,7 +213,6 @@ jobs:
 
       - name: Build and push exact two-platform image
         if: steps.plan.outputs.build == 'true'
-        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -231,9 +228,7 @@ jobs:
 
       - name: Reconcile Docker Hub with GHCR image
         if: steps.plan.outputs.build != 'true'
-        id: reconcile
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.preflight.outputs.version }}
           GHCR_IMAGE: ${{ needs.preflight.outputs.image }}
           DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/rule-bot-client
@@ -247,7 +242,6 @@ jobs:
             *) tags+=(--tag "$DOCKERHUB_IMAGE:latest") ;;
           esac
           docker buildx imagetools create "${tags[@]}" "$GHCR_IMAGE@$digest"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   openwrt-assets:
     name: Build OpenWrt release assets
