@@ -122,7 +122,7 @@ func resolveRuleBotToken(cfg RuleBotConfig) (string, error) {
 	return token, nil
 }
 
-func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore, configuredCachePath ...string) (*ruleBotSender, error) {
+func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore, cachePath string) (*ruleBotSender, error) {
 	if _, err := resolveRuleBotToken(cfg); err != nil {
 		return nil, err
 	}
@@ -175,9 +175,8 @@ func openRuleBotSender(cfg RuleBotConfig, outputPath string, store *outputStore,
 			return fail(errors.New("Rule-Bot pending offset does not reference a complete domain"))
 		}
 	}
-	cachePath := cfg.StateFile + ".dedupe-cache"
-	if len(configuredCachePath) != 0 && configuredCachePath[0] != "" {
-		cachePath = configuredCachePath[0]
+	if cachePath == "" {
+		cachePath = cfg.StateFile + ".dedupe-cache"
 	}
 	delivered, err := loadDeliveredRuleBotDomains(file, state.Offset, cfg, cachePath)
 	if err != nil {
@@ -340,7 +339,7 @@ func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
 		}
 		var deliveryErr error
 		if domain != "" {
-			_, deliveryErr = s.attempt(ctx, logger, domain)
+			deliveryErr = s.attempt(ctx, logger, domain)
 		}
 		if ctx.Err() != nil {
 			return nil
@@ -394,17 +393,17 @@ func (s *ruleBotSender) Run(ctx context.Context, logger *log.Logger) error {
 	}
 }
 
-func (s *ruleBotSender) attempt(ctx context.Context, logger *log.Logger, domain string) (string, error) {
+func (s *ruleBotSender) attempt(ctx context.Context, logger *log.Logger, domain string) error {
 	status, err := s.deliver(ctx, domain)
 	if ctx.Err() != nil {
-		return status, err
+		return err
 	}
 	if err != nil {
 		logger.Printf("WARN rule_bot domain_ref=%s delivery_failed=%s", domainReference(domain), ruleBotDeliveryLogReason(err))
 	} else {
 		logger.Printf("INFO rule_bot domain_ref=%s status=%s", domainReference(domain), status)
 	}
-	return status, err
+	return err
 }
 
 func ruleBotDeliveryLogReason(err error) string {

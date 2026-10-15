@@ -100,7 +100,6 @@ type SaveResponse struct {
 	OK       bool     `json:"ok"`
 	Config   Settings `json:"config"`
 	Warnings []string `json:"warnings,omitempty"`
-	Error    string   `json:"error,omitempty"`
 }
 
 func DefaultSettings() Settings {

@@ -55,7 +55,7 @@ function notifyError(error) {
 }
 
 function download(filename, content, mime) {
-	const blob = content instanceof Uint8Array ? new Blob([ content ], { type: mime }) : new Blob([ content ], { type: mime });
+	const blob = new Blob([ content ], { type: mime });
 	const url = URL.createObjectURL(blob);
 	const anchor = E('a', { href: url, download: filename });
 	document.body.appendChild(anchor);

@@ -15,7 +15,6 @@ import (
 type generatedConfig struct {
 	Config   client.Config
 	Adapters map[string]AdapterStatus
-	DataDir  string
 }
 
 func buildRuntimeConfig(root string, settings Settings) (generatedConfig, error) {
@@ -61,7 +60,7 @@ func buildRuntimeConfig(root string, settings Settings) (generatedConfig, error)
 			return generatedConfig{}, errors.New("Rule-Bot is enabled but its token is missing")
 		}
 	}
-	return generatedConfig{Config: config, Adapters: discovered.Adapters, DataDir: dataDir}, nil
+	return generatedConfig{Config: config, Adapters: discovered.Adapters}, nil
 }
 
 func writeRuntimeConfig(root string, generated generatedConfig) error {

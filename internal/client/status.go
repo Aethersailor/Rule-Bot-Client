@@ -2,7 +2,6 @@ package client
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -234,7 +233,6 @@ func (r *statusReporter) write() {
 		return
 	}
 	if err := os.Rename(temporaryPath, r.path); err != nil {
-		_ = fmt.Errorf("publish status: %w", err)
 		return
 	}
 	ok = true

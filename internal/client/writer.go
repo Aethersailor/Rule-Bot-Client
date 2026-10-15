@@ -24,11 +24,10 @@ type outputStore struct {
 	durable       atomic.Int64
 	dirty         bool
 	seen          *fingerprintSet
-	storageCheck  func(string, int64) error
 	storageBudget int64
 }
 
-func openOutput(path string, interval time.Duration, configuredCachePath ...string) (*outputStore, *fingerprintSet, error) {
+func openOutput(path string, interval time.Duration, cachePath string) (*outputStore, *fingerprintSet, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, nil, fmt.Errorf("create output directory: %w", err)
 	}
@@ -51,9 +50,8 @@ func openOutput(path string, interval time.Duration, configuredCachePath ...stri
 		_ = unlockFile(file)
 		return fail(fmt.Errorf("secure output permissions: %w", err))
 	}
-	cachePath := path + ".dedupe-cache"
-	if len(configuredCachePath) != 0 && configuredCachePath[0] != "" {
-		cachePath = configuredCachePath[0]
+	if cachePath == "" {
+		cachePath = path + ".dedupe-cache"
 	}
 	set, repairTail, err := loadExistingDomains(file, cachePath)
 	if err != nil {
@@ -72,11 +70,10 @@ func openOutput(path string, interval time.Duration, configuredCachePath ...stri
 		}
 	}
 	store := &outputStore{
-		file:         file,
-		buffered:     bufio.NewWriterSize(file, outputBufferSize),
-		interval:     interval,
-		seen:         set,
-		storageCheck: ensureStorageReserve,
+		file:     file,
+		buffered: bufio.NewWriterSize(file, outputBufferSize),
+		interval: interval,
+		seen:     set,
 	}
 	info, err := file.Stat()
 	if err != nil {
@@ -148,7 +145,7 @@ func (s *outputStore) Run(domains <-chan string) error {
 				if growth > window {
 					window = growth
 				}
-				if err := s.storageCheck(s.file.Name(), window); err != nil {
+				if err := ensureStorageReserve(s.file.Name(), window); err != nil {
 					return fmt.Errorf("preserve output storage reserve: %w", err)
 				}
 				s.storageBudget = window

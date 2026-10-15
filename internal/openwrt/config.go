@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -106,7 +106,7 @@ func regularNonempty(path string) bool {
 func settingsUCI(settings Settings) UCIConfig {
 	config := UCIConfig{Sections: []UCISection{{
 		Type: "main", Name: "main", Options: map[string]string{
-			"schema_version":             strconvItoa(settings.SchemaVersion),
+			"schema_version":             strconv.Itoa(settings.SchemaVersion),
 			"enabled":                    boolString(settings.Enabled),
 			"work_mode":                  settings.WorkMode,
 			"domain_mode":                settings.DomainMode,
@@ -381,14 +381,4 @@ func boolString(value bool) string {
 		return "1"
 	}
 	return "0"
-}
-
-func strconvItoa(value int) string { return fmt.Sprintf("%d", value) }
-
-func sortedSources(sources []Source) []Source {
-	copySources := append([]Source(nil), sources...)
-	sort.SliceStable(copySources, func(i, j int) bool {
-		return copySources[i].ID < copySources[j].ID
-	})
-	return copySources
 }
