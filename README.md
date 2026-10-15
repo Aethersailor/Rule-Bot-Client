@@ -8,8 +8,7 @@
 
 <p>
   <a href="https://github.com/Aethersailor/Rule-Bot-Client/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/Aethersailor/Rule-Bot-Client?display_name=tag&amp;sort=semver&amp;style=flat-square"></a>
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/actions/workflows/ci.yml"><img alt="CI 状态" src="https://img.shields.io/github/actions/workflow/status/Aethersailor/Rule-Bot-Client/ci.yml?branch=master&amp;label=CI&amp;style=flat-square"></a>
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/actions/workflows/openwrt-packages.yml"><img alt="OpenWrt 构建" src="https://img.shields.io/github/actions/workflow/status/Aethersailor/Rule-Bot-Client/openwrt-packages.yml?branch=master&amp;label=OpenWrt&amp;style=flat-square"></a>
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/actions/workflows/release.yml"><img alt="发布构建状态" src="https://img.shields.io/github/actions/workflow/status/Aethersailor/Rule-Bot-Client/release.yml?event=push&amp;label=Release&amp;style=flat-square"></a>
   <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/github/license/Aethersailor/Rule-Bot-Client?style=flat-square"></a>
 </p>
 
