@@ -50,10 +50,13 @@ jobs:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
         queries: security-and-quality
-    - name: Build Go sources for analysis
+    - name: Build all Go platform sources for analysis
       if: matrix.language == 'go'
       working-directory: .
-      run: go build -a -mod=readonly ./...
+      run: |
+        for target in linux windows freebsd; do
+          CGO_ENABLED=0 GOOS="$target" GOARCH=amd64 go build -a -mod=readonly ./...
+        done
     - name: Upload CodeQL results
       uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
       with:
