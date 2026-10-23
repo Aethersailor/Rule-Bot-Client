@@ -4,8 +4,16 @@
 const fs = require('fs');
 const path = require('path');
 
-function decodeLiteral(value, quote) {
-	return JSON.parse(quote === '"' ? `"${value}"` : `"${value.replace(/"/g, '\\"').replace(/\\'/g, "'")}"`);
+function decodeLiteral(value) {
+	// Consume existing escape sequences before escaping bare JSON quotes.
+	const json = value.replace(/\\.|"/g, (token) => {
+		if (token === "\\'")
+			return "'";
+		if (token === '"')
+			return '\\"';
+		return token;
+	});
+	return JSON.parse(`"${json}"`);
 }
 
 function lineNumber(source, offset) {
@@ -37,8 +45,7 @@ function collect(root) {
 		const source = fs.readFileSync(file, 'utf8');
 		for (const expression of [ /_\(\s*'((?:\\.|[^'\\])*)'\s*\)/g, /_\(\s*"((?:\\.|[^"\\])*)"\s*\)/g ]) {
 			for (const match of source.matchAll(expression)) {
-				const quote = match[0].includes("_('") ? "'" : '"';
-				add(decodeLiteral(match[1], quote), `${path.relative(root, file).replace(/\\/g, '/')}:${lineNumber(source, match.index)}`);
+				add(decodeLiteral(match[1]), `${path.relative(root, file).replace(/\\/g, '/')}:${lineNumber(source, match.index)}`);
 			}
 		}
 	}
