@@ -70,6 +70,7 @@ jobs:
 
           # Repository-token merges need an explicit follow-up workflow dispatch.
           if (( merged > 0 )); then
+            gh workflow run codeql.yml --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
             if jq -e 'any(.[]; . as $path | reduce ([{"regex":"^\\.github/DOCKERHUB_DESCRIPTION\\.md$","include":true}][]) as $pattern (false; if ($path | test($pattern.regex)) then $pattern.include else . end))' <<<"$merged_files" >/dev/null; then
               gh workflow run 'sync-dockerhub-description.yml' --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
             fi
