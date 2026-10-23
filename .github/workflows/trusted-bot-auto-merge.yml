@@ -2,14 +2,19 @@ name: Dependabot auto-merge
 
 on:
   pull_request_target:
+    branches: [master]
     types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [master]
+    paths: ['.github/workflows/trusted-bot-auto-merge.yml']
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: '51 */6 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: dependabot-auto-merge
@@ -17,62 +22,58 @@ concurrency:
 
 jobs:
   merge:
-    name: Merge Dependabot PRs
     if: github.event_name != 'pull_request_target' || github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
-      # Never check out or execute pull-request code with this write token.
-      - name: Merge current Dependabot updates
+      - name: Merge Dependabot updates
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: master
         shell: bash
         run: |
           set -euo pipefail
-
-          default_branch=$(gh api "repos/$REPOSITORY" --jq '.default_branch')
-          pull_requests=$(
-            gh api --paginate \
-              "repos/$REPOSITORY/pulls?state=open&base=$default_branch&sort=created&direction=asc&per_page=100" \
-              --jq '.[] | select(.user.login == "dependabot[bot]") | .number'
-          )
-
-          while IFS= read -r pull_number; do
-            test -n "$pull_number" || continue
-            # GitHub may need a moment to calculate mergeability after a push.
+          pull_numbers=$(gh api --paginate --method GET "repos/$REPOSITORY/pulls" \
+            -f state=open -f base="$BASE_BRANCH" -F per_page=100 \
+            --jq '.[] | select(.user.login == "dependabot[bot]") | .number')
+          before_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/$BASE_BRANCH" --jq '.object.sha')
+          merged_files='[]'
+          merged=0
+          result=0
+          while IFS= read -r number; do
+            test -n "$number" || continue
+            pull=$(gh api "repos/$REPOSITORY/pulls/$number")
+            head_sha=$(jq -r '.head.sha' <<<"$pull")
+            title=$(jq -r '.title' <<<"$pull")
+            files=$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$number/files?per_page=100" \
+              --jq '[.[][] | .filename]')
+            response=''
             for attempt in 1 2 3; do
-              pull=$(gh api "repos/$REPOSITORY/pulls/$pull_number")
-              if test "$(jq -r '.mergeable' <<<"$pull")" != null; then
+              if response=$(gh api --method PUT "repos/$REPOSITORY/pulls/$number/merge" \
+                -f merge_method=squash -f sha="$head_sha" \
+                -f commit_title="$title (#$number)" 2>&1); then
                 break
               fi
               sleep 2
             done
-
-            jq -e --arg repository "$REPOSITORY" --arg branch "$default_branch" '
-              .state == "open" and .draft == false and
-              .user.login == "dependabot[bot]" and .user.type == "Bot" and
-              .base.ref == $branch and .base.repo.full_name == $repository and
-              .head.repo.full_name == $repository and
-              (.head.ref | startswith("dependabot/"))
-            ' <<<"$pull" >/dev/null || continue
-
-            if test "$(jq -r '.mergeable' <<<"$pull")" != true; then
-              echo "PR #$pull_number is not mergeable yet; a Dependabot update or scheduled run will retry"
-              continue
+            if jq -e '.merged == true' <<<"$response" >/dev/null 2>&1; then
+              echo "Merged Dependabot PR #$number: $(jq -r '.sha' <<<"$response")"
+              merged_files=$(jq -cn --argjson previous "$merged_files" --argjson current "$files" \
+                '$previous + $current | unique')
+              merged=$((merged + 1))
+            else
+              echo "::warning::GitHub could not merge Dependabot PR #$number: $response"
+              result=1
             fi
+          done <<< "$pull_numbers"
 
-            head_sha=$(jq -r '.head.sha' <<<"$pull")
-            title=$(jq -r '.title' <<<"$pull")
-            if ! result=$(gh api --method PUT "repos/$REPOSITORY/pulls/$pull_number/merge" \
-              -f merge_method=squash \
-              -f sha="$head_sha" \
-              -f commit_title="$title (#$pull_number)" 2>&1); then
-              echo "::warning::PR #$pull_number could not be merged: $result"
-              continue
+          # Repository-token merges need an explicit follow-up workflow dispatch.
+          if (( merged > 0 )); then
+            if jq -e 'any(.[]; . as $path | reduce ([{"regex":"^\\.github/DOCKERHUB_DESCRIPTION\\.md$","include":true}][]) as $pattern (false; if ($path | test($pattern.regex)) then $pattern.include else . end))' <<<"$merged_files" >/dev/null; then
+              gh workflow run 'sync-dockerhub-description.yml' --repo "$REPOSITORY" --ref "$BASE_BRANCH" || result=1
             fi
-            jq -e '.merged == true' <<<"$result" >/dev/null
-            echo "Merged Dependabot PR #$pull_number at $head_sha"
-          done <<<"$pull_requests"
+          fi
 
-          echo "Dependabot queue reconciliation completed"
+          echo "Merged $merged Dependabot PR(s) with the repository Actions token"
+          exit "$result"
