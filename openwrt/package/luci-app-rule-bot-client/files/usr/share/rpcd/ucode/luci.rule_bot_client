@@ -2,10 +2,11 @@
 
 'use strict';
 
-import { chmod, error as fs_error, popen, readfile, writefile, unlink } from 'fs';
+import { chmod, error as fs_error, lstat, mkdir, popen, readfile, writefile, unlink } from 'fs';
 
 const helper = '/usr/libexec/rule-bot-client-openwrt';
-const request_dir = '/var/run/rule-bot-client/rpc';
+const runtime_dir = '/var/run/rule-bot-client';
+const request_dir = `${runtime_dir}/rpc`;
 const allowed_actions = {
 	config: true, config_edit: true, status: true, probe: true, domains: true, export: true,
 	logs: true, backup: true, upgrade: true, update_status: true, update_check: true,
@@ -15,10 +16,19 @@ const allowed_actions = {
 function invoke(action, args) {
 	if (!allowed_actions[action])
 		return { ok: false, error_code: 'unsupported_backend_action', error: 'Unsupported Rule-Bot Client backend action' };
+	// LuCI must work after reboot with the collector disabled.
+	for (let path, mode in { [runtime_dir]: 0o750, [request_dir]: 0o700 }) {
+		if (!mkdir(path, mode) && lstat(path)?.type != 'directory')
+			return { ok: false, error_code: 'backend_request_failed', error: `Unable to create the Rule-Bot Client request directory (${fs_error()})` };
+	}
+
 	const uuid = replace(trim(readfile('/proc/sys/kernel/random/uuid')), '-', '');
 	const request = `${request_dir}/${uuid}.json`;
-	writefile(request, args ?? {});
-	chmod(request, 0o600);
+	if (writefile(request, args ?? {}) === null || !chmod(request, 0o600)) {
+		const detail = fs_error();
+		unlink(request);
+		return { ok: false, error_code: 'backend_request_failed', error: `Unable to write the Rule-Bot Client request (${detail})` };
+	}
 	// The command is composed exclusively from the allowlisted action above and
 	// a kernel-generated hexadecimal UUID; no request value reaches the shell.
 	const process = popen(`${helper} ${action} ${uuid}`, 'r');
