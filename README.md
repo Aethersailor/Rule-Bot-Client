@@ -179,8 +179,8 @@ sh /tmp/install-rule-bot-client-openwrt.sh
 本地收集正常后，可以填写服务方提供的 Rule-Bot 提交地址和访问令牌（Token）：
 
 - 私用地址由 Rule-Bot 部署者提供。
-- 社区用户可以按照 Wiki 的[接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot)流程，私聊 [@asailor_rulebot](https://t.me/asailor_rulebot)，阅读并同意隐私说明，通过群成员验证后领取个人访问令牌。
-- 群聊只用于社区资格验证。客户端不会读取群消息，也不会把处理结果发送到群内。
+- 使用公共实例时，在 Telegram 私聊 [@asailor_rulebot](https://t.me/asailor_rulebot)，阅读并同意隐私说明后即可申请个人 Token，无需入群。机器人会提供完整提交地址和个人 Token。具体步骤见[接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot)。
+- 客户端通过 Rule-Bot API 提交域名，并从 API 响应获取处理结果。
 - 首次启用且没有发送进度文件时，默认只发送之后新增的域名，不发送本地清单中的历史内容。已有发送进度文件时，重新启用会从原进度继续。
 
 项目公共 Rule-Bot 会把通过检查的域名写入 [Custom_OpenClash_Rules 的 `rule/Custom_Direct.list`](https://github.com/Aethersailor/Custom_OpenClash_Rules/blob/main/rule/Custom_Direct.list)。自行部署的 Rule-Bot 可以使用其他目标仓库；客户端不会自行选择仓库或规则文件。
