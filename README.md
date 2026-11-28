@@ -2,20 +2,22 @@
 
 <h1>Rule-Bot Client</h1>
 
-<p><strong>发现 Mihomo 最终规则命中的域名，把值得检查的目标整理成清单。</strong></p>
+<p><strong>Find domains from connections that reach Mihomo's fallback rule and build a list of candidates for review.</strong></p>
 
-<p>本地保存优先 · 可选接入 Rule-Bot · 一个客户端可监听多个 Mihomo</p>
+<p>Local storage by default · Optional Rule-Bot integration · One client can monitor multiple Mihomo instances</p>
+
+<p>English · <a href="README-zh-CN.md">简体中文</a></p>
 
 <p>
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/Aethersailor/Rule-Bot-Client?display_name=tag&amp;sort=semver&amp;style=flat-square"></a>
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/actions/workflows/release.yml"><img alt="发布构建状态" src="https://img.shields.io/github/actions/workflow/status/Aethersailor/Rule-Bot-Client/release.yml?event=push&amp;label=Release&amp;style=flat-square"></a>
-  <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/github/license/Aethersailor/Rule-Bot-Client?style=flat-square"></a>
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Aethersailor/Rule-Bot-Client?display_name=tag&amp;sort=semver&amp;style=flat-square"></a>
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/actions/workflows/release.yml"><img alt="Release build status" src="https://img.shields.io/github/actions/workflow/status/Aethersailor/Rule-Bot-Client/release.yml?event=push&amp;label=Release&amp;style=flat-square"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/Aethersailor/Rule-Bot-Client?style=flat-square"></a>
 </p>
 
 <p>
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/releases/latest">⬇️ 下载</a> ·
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/wiki">📖 用户 Wiki</a> ·
-  <a href="https://github.com/Aethersailor/Rule-Bot-Client/issues">💬 问题反馈</a>
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/releases/latest">⬇️ Download</a> ·
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/wiki">📖 User Wiki</a> ·
+  <a href="https://github.com/Aethersailor/Rule-Bot-Client/issues">💬 Report an Issue</a>
 </p>
 
 </div>
@@ -23,121 +25,121 @@
 ---
 
 > [!WARNING]
-> 本软件仅供在中华人民共和国境外学习和研究使用。
+> This software is intended solely for study and research outside the People's Republic of China.
 >
-> **禁止任何组织或个人在中国大陆访问、下载、部署或使用本项目的任何内容。身处中国大陆的访客请立即关闭本页面。**
+> **Organizations and individuals are prohibited from accessing, downloading, deploying, or using any part of this project in mainland China. If you are in mainland China, close this page immediately.**
 >
-> 任何组织或个人均不得利用本项目内容从事违反适用法律法规的活动。使用者须自行承担其使用行为产生的法律责任。
+> Organizations and individuals must not use any part of this project for activities that violate applicable laws or regulations. Users are individually responsible for the legal consequences of their use.
 
-Rule-Bot Client 用来发现可能需要补充规则的域名。它读取 Mihomo 的连接信息，找出最终由兜底规则 `MATCH` 处理的域名，并保存为本地清单。需要时，还可以把域名发送给 [Rule-Bot](https://github.com/Aethersailor/Rule-Bot) 做进一步检查。
+Rule-Bot Client finds domains that may need additional rules. It reads Mihomo connection information, identifies domains from connections ultimately handled by the fallback rule `MATCH`, and saves them to a local list. It can also send domains to [Rule-Bot](https://github.com/Aethersailor/Rule-Bot) for further checks when needed.
 
 > [!IMPORTANT]
-> **项目边界声明**
+> **Project scope**
 >
-> 本项目不提供可供用户使用的代理服务器、代理节点或节点订阅，不运营「机场」等代理服务，也不提供网络接入服务。本项目及其维护者与上述服务提供者不存在合作、代理或担保关系。
+> This project provides no proxy servers, proxy nodes, or node subscriptions for users. It operates no commercial or other proxy services and provides no internet access services. Neither the project nor its maintainers partner with, represent, or act as guarantors for such providers.
 
 > [!TIP]
-> **第一次使用？** 先了解下面四个概念，再根据设备选择一种部署方式。安装后先验证本地收集，确认正常后再决定是否启用 Rule-Bot。
+> **First time here?** Start with the four concepts below, then choose a deployment method for your device. After installation, verify local collection before deciding whether to enable Rule-Bot integration.
 
-<a id="先了解几个关键概念"></a>
-## 🧭 先了解几个关键概念
+<a id="key-concepts"></a>
+## 🧭 Key Concepts
 
-- **Mihomo**：实际处理代理连接和规则匹配的内核。OpenClash、Nikki 等工具可以管理 Mihomo 内核。
-- **`MATCH`**：Mihomo 规则列表末尾的兜底规则。连接没有命中前面的规则时，才会交给 `MATCH` 处理。命中 `MATCH` 不一定代表规则错误，但这些域名通常值得检查。
-- **Mihomo 控制接口**：Mihomo 自带的 HTTP 管理接口，配置项通常叫 `external-controller`。管理面板和其他工具通过它读取 Mihomo 的运行状态。Rule-Bot Client 也通过这个接口读取日志和当前连接；它不是需要另行安装的程序。英文资料和部分界面也把它称为 Controller。
-- **Rule-Bot**：可选的配套服务。它会检查域名是否已有规则、是否已被 GeoSite 域名库覆盖，以及是否符合服务端策略。本地收集不需要 Rule-Bot。
+- **Mihomo** is the core that handles proxy connections and matches them against rules. Tools such as OpenClash and Nikki can manage the Mihomo core.
+- **`MATCH`** is the fallback rule at the end of Mihomo's rule list. If no earlier rule matches, Mihomo uses `MATCH` to handle the connection. A `MATCH` result can be expected behavior, though the domains are often worth reviewing.
+- **Mihomo controller** is the HTTP management interface built into Mihomo, typically configured via `external-controller`. Dashboards and other tools use it to read Mihomo's runtime status. Rule-Bot Client uses the same interface to read logs and active connections. It comes with Mihomo and requires no separate installation. English documentation and some interfaces call it the Controller.
+- **Rule-Bot** is an optional companion service. It checks whether a domain is already covered by an existing rule or the GeoSite domain database and whether it meets the server's policy. Local collection works without Rule-Bot.
 
-<a id="它能做什么"></a>
-## ✨ 它能做什么
+<a id="features"></a>
+## ✨ Features
 
-- 把最终由 `MATCH` 处理的域名整理成去重后的本地清单。
-- 一个客户端同时连接多个 Mihomo 控制接口，采集多个正在运行的 Mihomo 内核，包括由 OpenClash 或 Nikki 管理的内核。
-- 可选把域名发送给 Rule-Bot，由服务端决定是否补充直连规则。
+- Keep a deduplicated local list of domains from connections ultimately handled by `MATCH`.
+- Connect to multiple Mihomo controllers at once and collect domains from multiple running Mihomo cores, including cores managed by OpenClash or Nikki.
+- Optionally send domains to Rule-Bot so the server can decide whether to add direct-routing rules.
 
-Rule-Bot Client 不是代理客户端，也不会修改 Mihomo 配置。它不会记录 URL 路径、查询参数、网页内容或应用名称，也不能代替完整的流量审计工具。
+Rule-Bot Client does not proxy traffic or modify the Mihomo configuration. It does not record URL paths, query parameters, page contents, or application names, and it cannot substitute for a full traffic auditing tool.
 
-<a id="它怎样工作"></a>
-## 🔄 它怎样工作
+<a id="how-it-works"></a>
+## 🔄 How It Works
 
-| ① 数据来源 | ② 客户端处理 | ③ 默认结果 |
+| ① Data source | ② Client processing | ③ Default result |
 |:---:|:---:|:---:|
-| Mihomo 日志和当前连接 | Rule-Bot Client 筛选最终由 `MATCH` 处理的域名 | 保存到本地域名清单 |
+| Mihomo logs and active connections | Rule-Bot Client selects domains from connections ultimately handled by `MATCH` | Domains are saved to the local list |
 
 > [!NOTE]
-> 启用可选的 Rule-Bot 后，客户端还会把域名发送给 Rule-Bot 检查；通过检查的域名才会进入 GitHub 规则仓库。
+> When Rule-Bot integration is enabled, the client also sends domains to Rule-Bot for review. Only domains that pass the checks are added to the GitHub rules repository.
 
-Rule-Bot 发送功能默认关闭。只使用本地收集时，域名不会发送给 Rule-Bot。
+Sending to Rule-Bot is disabled by default. With local collection only, the client never sends domains to Rule-Bot.
 
-<a id="与其他项目的关系"></a>
-## 🔗 与其他项目的关系
+<a id="related-projects"></a>
+## 🔗 Related Projects
 
-Rule-Bot Client 可以独立完成本地域名收集。其余项目只在对应场景中使用：
+Rule-Bot Client can collect domains locally on its own. The other projects apply in the following cases.
 
-| 项目 | 作用 | 是否必需 |
+| Project | Role | Required? |
 | --- | --- | --- |
-| [Rule-Bot](https://github.com/Aethersailor/Rule-Bot) | 检查候选域名，并按服务端策略写入目标 GitHub 规则仓库 | 可选；本地收集不需要 |
-| [Custom_OpenClash_Rules](https://github.com/Aethersailor/Custom_OpenClash_Rules) | 项目公共 Rule-Bot 的目标规则仓库 | 仅使用公共提交服务时相关 |
-| [SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | 可选的订阅转换后端，可使用 Custom_OpenClash_Rules 模板生成配置 | 与域名收集和发送没有直接依赖 |
+| [Rule-Bot](https://github.com/Aethersailor/Rule-Bot) | Checks candidate domains and writes them to the target GitHub rules repository according to server policy | Optional for submissions. Local collection works independently |
+| [Custom_OpenClash_Rules](https://github.com/Aethersailor/Custom_OpenClash_Rules) | The target rules repository for the project's public Rule-Bot instance | Relevant only when using the public submission service |
+| [SubConverter-Extended](https://github.com/Aethersailor/SubConverter-Extended) | An optional subscription conversion backend that can generate configurations with Custom_OpenClash_Rules templates | Neither collection nor submission depends directly on it |
 
-公共服务中的数据流为：
+Data flows through the public service as follows.
 
-`Mihomo 的 MATCH 连接` → `Rule-Bot Client 本地收集` → `用户主动启用发送` → `Rule-Bot 检查` → `Custom_OpenClash_Rules`
+`Mihomo connections matching MATCH` → `Rule-Bot Client collects locally` → `User enables sending` → `Rule-Bot checks domains` → `Custom_OpenClash_Rules`
 
-<a id="安装前需要确认"></a>
-## ✅ 安装前需要确认
+<a id="prerequisites"></a>
+## ✅ Prerequisites
 
-- 已有正在运行的 Mihomo 内核。使用 OpenClash 或 Nikki 时，需要确认它们当前使用的是 Mihomo。
-- 安装 Rule-Bot Client 的设备能够访问 Mihomo 控制接口。控制接口设置了密钥时，还需要准备对应密钥。
-- Mihomo 日志级别为 `info` 或更详细。日志级别只保留警告或错误时，客户端看不到用于判断 `MATCH` 的连接日志。
-- 已确认有权收集设备或网络中的域名。共享网络尤其需要先了解下方的隐私边界。
+- A running Mihomo core. If you use OpenClash or Nikki, confirm that it is currently using Mihomo.
+- The device running Rule-Bot Client must be able to reach the Mihomo controller. If the controller is configured with a secret, have that secret ready.
+- Mihomo's log level must be `info` or more verbose. If only warnings or errors are logged, the client cannot see the connection logs it uses to identify `MATCH` traffic.
+- Confirm that you have permission to collect domains on the device or network. On shared networks in particular, read the privacy guidance below first.
 
-OpenWrt 软件包可以自动发现本机的 OpenClash 或 Nikki。其他部署方式通常需要填写 Mihomo 控制接口的地址和密钥。
+The OpenWrt package can automatically discover OpenClash or Nikki on the same device. Other deployment methods typically require the Mihomo controller address and secret.
 
-具体位置和示例见 Wiki 的[配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E)。
+See [Configuration](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) in the Wiki for where to find these settings and for examples.
 
-<a id="只选择一个部署位置"></a>
-## 🎯 只选择一个部署位置
+<a id="choose-one-deployment-location"></a>
+## 🎯 Choose One Deployment Location
 
 > [!IMPORTANT]
-> 同一套网络通常只需部署一个 Rule-Bot Client，不需要在 OpenWrt 和 Linux 上各安装一份。只要部署位置能够访问各个 Mihomo 控制接口，一个客户端就能同时采集多个正在运行的 Mihomo 内核，并统一去重。
+> One Rule-Bot Client installation is usually enough for a network. Installing it on both OpenWrt and Linux is unnecessary. As long as the chosen host can reach each Mihomo controller, one client can collect domains from multiple running cores and deduplicate them together.
 
-优先选择能够长期运行、且可以访问各个 Mihomo 控制接口的 Linux、NAS 或其他能够运行 Docker 的设备。只有 OpenWrt 是唯一合适的常驻设备时，再把客户端安装到 OpenWrt。仅当网络相互隔离，没有任何一个部署位置能够访问全部控制接口时，才需要部署多个客户端。
+Prefer an always-on Linux, NAS, or other Docker-capable device that can reach every Mihomo controller. Install the client on OpenWrt only when it is the sole suitable always-on device. Multiple clients are necessary only if the networks are isolated and no single deployment location can reach all controllers.
 
-<a id="选择安装方式"></a>
-## 🚀 选择安装方式
+<a id="choose-an-installation-method"></a>
+## 🚀 Choose an Installation Method
 
-| 使用环境 | 推荐方式 | 说明 |
+| Environment | Recommended method | Details |
 | --- | --- | --- |
-| 🐳 已安装 Docker 的 Linux 或 NAS | Docker Compose | 镜像支持 `linux/amd64` 和 `linux/arm64` |
-| 📦 Debian 或 Ubuntu | `.deb` 软件包 | 支持 `amd64`、`arm64` 和 `armhf`，作为系统服务运行 |
-| 🧰 不使用 Docker 的 Linux | 原生二进制 | 提供 AMD64、386、ARM、MIPS、MIPS64、RISC-V 等构建，需要自行管理服务 |
-| 🪟 Windows 10 或 11 | 便携压缩包 | 提供 AMD64 和 ARM64 构建，解压后编辑配置即可运行 |
-| 📡 只有 OpenWrt 常驻设备 | LuCI 软件包 | 提供 OpenWrt 24.10 的 31 种 IPK 包架构和 OpenWrt 25.12 的 30 种 APK 包架构，兼容对应的 ImmortalWrt 系统，通过 OpenWrt Web 界面配置 |
+| 🐳 Linux or NAS with Docker installed | Docker Compose | Images support `linux/amd64` and `linux/arm64` |
+| 📦 Debian or Ubuntu | `.deb` package | Supports `amd64`, `arm64`, and `armhf` and runs as a system service |
+| 🧰 Linux without Docker | Native binary | Includes AMD64, 386, ARM, MIPS, MIPS64, and RISC-V builds. Manage the service yourself |
+| 🪟 Windows 10 or 11 | Portable archive | AMD64 and ARM64 builds are available. Extract the archive and edit the configuration to run |
+| 📡 OpenWrt is the only always-on device | LuCI package | Provides IPK packages for 31 OpenWrt 24.10 architectures and APK packages for 30 OpenWrt 25.12 architectures. The packages support corresponding ImmortalWrt systems and are configured through the OpenWrt web interface |
 
-当前没有 macOS 正式构建。OpenWrt 必须使用专用的 IPK 或 APK 软件包，不要安装通用 Linux 压缩包。
+There are currently no official macOS builds. On OpenWrt, use the dedicated IPK or APK package and avoid installing a generic Linux archive.
 
-### 推荐：Linux、NAS 或 Docker
+### Recommended for Linux, NAS, or Docker
 
-Debian 软件包、Docker Compose 和原生二进制的完整步骤见 [Linux 部署方式](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker)。
+See [Linux Deployment](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker) for the full instructions for Debian packages, Docker Compose, and native binaries.
 
-Linux 版本没有 Web 管理页面，需要编辑 JSON 文本配置文件，并通过日志和输出文件确认状态。
+The Linux version has no web administration page. Edit the JSON configuration file directly and use logs and output files to verify the client status.
 
-### Windows 便携版
+### Windows Portable Build
 
-从正式版本页面下载与设备匹配的 Windows 压缩包。解压、复制并编辑示例配置后即可运行，不需要安装程序。完整步骤见 [Windows 便携版](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88)。
+Download the Windows archive for your device from the stable release page. Extract it, copy and edit the example configuration, and run the client. No installer is required. See [Windows Portable Build](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88) for the full instructions.
 
-### 只有 OpenWrt 设备时
+### When OpenWrt Is the Only Available Device
 
 > [!WARNING]
-> OpenWrt 包由本项目通过 GitHub Releases 发布，不属于 OpenWrt 官方软件源。固件升级不能保证保留或自动重装该包。
+> The project publishes OpenWrt packages through GitHub Releases. They are outside the official OpenWrt package feeds. A firmware upgrade may leave the package missing without automatically reinstalling it.
 >
-> 如果新固件没有包含它，Rule-Bot Client 程序、后台服务和 LuCI 管理页面会消失。选择保留设置且保留清单完整时，配置和默认持久化数据可以继续保留；软件包丢失后仍需重新安装。详见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97#%E5%A4%87%E4%BB%BD%E4%B8%8E%E5%9B%BA%E4%BB%B6%E5%8D%87%E7%BA%A7)。
+> If the new firmware omits the package, the Rule-Bot Client executable, background service, and LuCI administration page will be removed. The configuration and default persistent data can carry over if you retain settings and the list of files to retain is complete. Reinstall the package if it is missing. See the [OpenWrt User Guide](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97#%E5%A4%87%E4%BB%BD%E4%B8%8E%E5%9B%BA%E4%BB%B6%E5%8D%87%E7%BA%A7).
 >
-> 不要在 LuCI「软件包」页面直接上传 APK。第三方 Release APK 不受固件的软件源签名密钥信任，直接上传会被 `UNTRUSTED signature` 拒绝。下面的安装脚本会先校验 Release 清单、文件大小和 SHA-256，再仅对已校验的本地 APK 使用 `--allow-untrusted`。
+> Avoid uploading the APK directly through the LuCI package manager. The firmware's package feed signing keys do not trust third-party release APKs, so a direct upload fails with `UNTRUSTED signature`. The script below verifies the release manifest, file size, and SHA-256 first. It uses `--allow-untrusted` only for the local APK that passed those checks.
 
-软件包安装后会启用后台服务并尝试启动。默认设置会自动发现 OpenClash，并且只在本地保存域名；Rule-Bot 发送功能默认关闭。运行安装命令前，需要确认允许在这台路由器上收集域名。
+After installation, the package enables the background service and attempts to start it. By default, it discovers OpenClash automatically and stores domains locally. Sending to Rule-Bot is disabled by default. Before running the installation commands, confirm that you have permission to collect domains on this router.
 
-在 OpenWrt 的 SSH 终端中运行：
+Run these commands in an SSH session on OpenWrt.
 
 ```sh
 wget -O /tmp/install-rule-bot-client-openwrt.sh \
@@ -146,73 +148,73 @@ cat /tmp/install-rule-bot-client-openwrt.sh
 sh /tmp/install-rule-bot-client-openwrt.sh
 ```
 
-脚本会识别 OpenWrt/ImmortalWrt、软件包格式和设备架构，并在安装前校验下载文件。ImmortalWrt SNAPSHOT 使用经过哈希校验的 OpenWrt 25.12 APK 兼容构建，最终依赖关系仍由设备上的 `apk` 校验。
+The script detects OpenWrt or ImmortalWrt, the package format, and the device architecture. It verifies the downloaded file before installation. On ImmortalWrt SNAPSHOT, the script uses a hash-verified OpenWrt 25.12 APK as a compatibility build. The device's `apk` still performs the final dependency checks.
 
-安装完成后，打开「服务 → Rule-Bot Client」。首次连接和验证步骤见 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97)。
+After installation, open **Services → Rule-Bot Client**. See the [OpenWrt User Guide](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97) for the initial connection and verification steps.
 
-<a id="怎样确认已经正常工作"></a>
-## 🔎 怎样确认已经正常工作
+<a id="verify-operation"></a>
+## 🔎 Verify Operation
 
-安装成功不代表已经连接 Mihomo。按下面的顺序检查：
+After installation, verify the Mihomo connection and collection in the following order.
 
-| 检查内容 | 正常表现 |
+| What to check | Expected result |
 | --- | --- |
-| 🟢 后台服务 | OpenWrt「概览」显示正在运行，或 Linux、Docker 显示进程正在运行 |
-| 🔗 Mihomo 控制接口 | OpenWrt「测试连接」成功，或 Linux 日志出现 `instance=... connected` |
-| 📝 本地收集 | 访问一个此前未收集、最终由 `MATCH` 处理的域名后，「本地结果」或输出文件出现新行 |
-| 🤖 Rule-Bot 处理 | 启用后，日志显示已添加、规则已存在、GeoSite 已覆盖或策略拒绝等最终结果 |
+| 🟢 Background service | **Overview** on OpenWrt shows that the service is running, or Linux or Docker reports that the process is running |
+| 🔗 Mihomo controller | **Test connection** succeeds on OpenWrt, or the Linux log contains `instance=... connected` |
+| 📝 Local collection | After visiting a domain that has yet to be collected and is ultimately handled by `MATCH`, a new line appears under **Local results** or in the output file |
+| 🤖 Rule-Bot processing | Once sending is enabled, the log shows a final outcome such as the domain being added, already present, covered by GeoSite, or rejected by policy |
 
-本地输出默认每 5 秒刷新一次。`--check` 只检查 JSON 格式、凭据和 HTTPS 证书文件，不会连接 Mihomo。因此，出现 `configuration is valid` 只代表配置可以读取，不代表 Mihomo 已经连通。
+Local output refreshes every 5 seconds by default. `--check` validates JSON syntax, credentials, and HTTPS certificate files without connecting to Mihomo. A `configuration is valid` result confirms that the configuration can be read. Check Mihomo connectivity separately.
 
-如果不确定某次连接是否由 `MATCH` 处理，可以先在 Mihomo 管理面板、OpenClash 日志或连接详情中查看命中的规则。所有连接都命中前面的其他规则时，没有新增域名是正常现象。
+If you are unsure whether `MATCH` handled a connection, check the matched rule in the Mihomo dashboard, OpenClash logs, or connection details. When every connection matches an earlier rule, it is normal for the client to collect no new domains.
 
-<a id="隐私与使用边界"></a>
-## 🔐 隐私与使用边界
+<a id="privacy-and-usage-boundaries"></a>
+## 🔐 Privacy and Usage Boundaries
 
 > [!CAUTION]
-> 域名清单可能反映个人、家庭或组织网络的访问行为。本地清单不会自动过期。成功添加的域名会进入目标仓库的提交历史；目标仓库公开时，域名也会公开。之后吊销访问令牌或关闭客户端，无法撤回已有提交。
+> Domain lists may reveal browsing activity on personal, household, or organizational networks. Local lists never expire automatically. Successfully added domains enter the target repository's commit history and are public if the repository is public. Revoking an access token or turning off the client afterward cannot undo existing commits.
 
-- 本地域名清单每行只包含一个域名，不为每个域名记录访问次数或时间戳；运行日志和可选状态文件仍会包含运维时间与计数。
-- 默认也会收集连接失败、但最终由 `MATCH` 处理的域名；不需要时可以在配置中关闭。
-- OpenWrt 和随附示例默认只保存可注册部分。例如，`service.example.co.uk` 保存为 `example.co.uk`，从而减少完整子域带来的识别风险。
-- Mihomo 的实时日志没有历史队列。客户端断线期间已经结束的短连接可能无法补回，因此本项目不保证审计级的零丢失。
-- 使用公网 Rule-Bot 提交地址时必须使用 HTTPS。不要把访问令牌、Mihomo 控制接口密钥或完整配置发布到 Issue、聊天记录或公开仓库。
+- The local list stores one domain per line, with no per-domain visit counts or timestamps. Runtime logs and optional status files still include operational timestamps and counts.
+- By default, the client also collects domains from failed connections ultimately handled by `MATCH`. Disable this behavior in the configuration if you do not need it.
+- The OpenWrt package and bundled examples store only the registrable domain by default. For example, `service.example.co.uk` is saved as `example.co.uk`. This reduces the identification risk of storing full subdomains.
+- Mihomo's real-time logs have no history queue. The client may be unable to recover short-lived connections that ended while it was disconnected, so the project cannot guarantee lossless, audit-grade collection.
+- Public Rule-Bot submission endpoints require HTTPS. Keep access tokens, Mihomo controller secrets, and full configurations out of issues, chat logs, and public repositories.
 
-启用 Rule-Bot 前，请阅读完整的 [客户端隐私说明](PRIVACY.md) 和对应服务方的隐私说明。使用项目公共服务时，同时阅读 [Rule-Bot 隐私说明](https://github.com/Aethersailor/Rule-Bot/blob/master/PRIVACY.md)。
+Before enabling Rule-Bot integration, read the full [Client Privacy Notice](PRIVACY.md) and the relevant service provider's privacy notice. If you use the project's public service, also read the [Rule-Bot Privacy Notice](https://github.com/Aethersailor/Rule-Bot/blob/master/PRIVACY.md).
 
-<a id="可选发送给-rule-bot"></a>
-## 🤖 可选：发送给 Rule-Bot
+<a id="optional-send-to-rule-bot"></a>
+## 🤖 Optional Submission to Rule-Bot
 
-本地收集正常后，可以填写服务方提供的 Rule-Bot 提交地址和访问令牌（Token）：
+Once local collection is working, you can enter the Rule-Bot submission endpoint and access token supplied by the service provider.
 
-- 私用地址由 Rule-Bot 部署者提供。
-- 使用公共实例时，在 Telegram 私聊 [@asailor_rulebot](https://t.me/asailor_rulebot)，阅读并同意隐私说明后即可申请个人 Token，无需入群。机器人会提供完整提交地址和个人 Token。具体步骤见[接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot)。
-- 客户端通过 Rule-Bot API 提交域名，并从 API 响应获取处理结果。
-- 首次启用且没有发送进度文件时，默认只发送之后新增的域名，不发送本地清单中的历史内容。已有发送进度文件时，重新启用会从原进度继续。
+- For a private instance, obtain the endpoint from the Rule-Bot operator.
+- For the public instance, open a private Telegram chat with [@asailor_rulebot](https://t.me/asailor_rulebot), then read and agree to the Privacy Notice before requesting a personal token. Group membership is unnecessary. The bot supplies the full submission endpoint and personal token. See [Connect to the Public Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot) for the steps.
+- The client submits domains through the Rule-Bot API and obtains the processing result from the API response.
+- If you enable sending for the first time and no submission progress file exists, the client sends only domains collected from that point onward by default. It skips existing entries in the local list. With a progress file, re-enabling sending resumes from the recorded position.
 
-项目公共 Rule-Bot 会把通过检查的域名写入 [Custom_OpenClash_Rules 的 `rule/Custom_Direct.list`](https://github.com/Aethersailor/Custom_OpenClash_Rules/blob/main/rule/Custom_Direct.list)。自行部署的 Rule-Bot 可以使用其他目标仓库；客户端不会自行选择仓库或规则文件。
+The project's public Rule-Bot instance writes domains that pass its checks to [`rule/Custom_Direct.list` in Custom_OpenClash_Rules](https://github.com/Aethersailor/Custom_OpenClash_Rules/blob/main/rule/Custom_Direct.list). Self-hosted Rule-Bot instances can use other target repositories. The Rule-Bot deployment determines the target repository and rule file.
 
-具体字段见 Wiki 的[配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E)。
+See [Configuration](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) in the Wiki for specific fields.
 
-自行部署 Rule-Bot 时，另见 [Rule-Bot Client 接入说明](https://github.com/Aethersailor/Rule-Bot/wiki/Rule-Bot-Client-%E6%8E%A5%E5%85%A5)。
+If you deploy your own Rule-Bot instance, also see [Rule-Bot Client Integration](https://github.com/Aethersailor/Rule-Bot/wiki/Rule-Bot-Client-%E6%8E%A5%E5%85%A5).
 
-<a id="用户文档"></a>
-## 📚 用户文档
+<a id="user-documentation"></a>
+## 📚 User Documentation
 
-| 文档 | 内容 |
+| Document | Topics |
 | --- | --- |
-| 🐧 [Linux 部署方式](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker) | 根据系统选择 Debian 软件包、Docker Compose 或原生二进制 |
-| 🪟 [Windows 便携版](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88) | 下载、配置、运行和自动更新 Windows 便携包 |
-| 📡 [OpenWrt 使用指南](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97) | 安装、首次配置、升级、备份和卸载 |
-| ⚙️ [配置说明](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) | Mihomo 控制接口、域名保存方式、Rule-Bot、HTTPS 和代理设置 |
-| 🔗 [接入公共 Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot) | 申请个人 Token、配置客户端、验证处理结果和管理凭据 |
-| 🩺 [故障排查](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5) | 无法启动、无法连接、没有结果和 Rule-Bot 发送失败 |
-| 🔐 [隐私说明](PRIVACY.md) | 本地保存、发送到外部的数据、出口 IP 和用户控制 |
-| 🛡️ [安全策略](SECURITY.md) | 私密报告安全问题，以及公开反馈前需要移除的信息 |
+| 🐧 [Linux Deployment](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Linux-%E4%B8%8E-Docker) | Choose a Debian package, Docker Compose, or a native binary based on your system |
+| 🪟 [Windows Portable Build](https://github.com/Aethersailor/Rule-Bot-Client/wiki/Windows-%E4%BE%BF%E6%90%BA%E7%89%88) | Download, configure, run, and automatically update the Windows portable package |
+| 📡 [OpenWrt User Guide](https://github.com/Aethersailor/Rule-Bot-Client/wiki/OpenWrt-%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97) | Installation, initial configuration, upgrades, backups, and uninstallation |
+| ⚙️ [Configuration](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E) | Mihomo controllers, domain storage, Rule-Bot, HTTPS, and proxy settings |
+| 🔗 [Connect to the Public Rule-Bot](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%8E%A5%E5%85%A5%E5%85%AC%E5%85%B1-Rule-Bot) | Request a personal token, configure the client, verify processing results, and manage credentials |
+| 🩺 [Troubleshooting](https://github.com/Aethersailor/Rule-Bot-Client/wiki/%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5) | Startup and connection failures, missing results, and failed submissions to Rule-Bot |
+| 🔐 [Privacy Notice](PRIVACY.md) | Local storage, data sent externally, egress IP addresses, and user controls |
+| 🛡️ [Security Policy](SECURITY.md) | Report security issues privately and learn what to remove before posting publicly |
 
-<a id="反馈与许可"></a>
-## 💬 反馈与许可
+<a id="feedback-and-license"></a>
+## 💬 Feedback and License
 
-使用问题或功能建议可以提交到 [GitHub Issues](https://github.com/Aethersailor/Rule-Bot-Client/issues)。公开反馈前，请移除访问令牌、Mihomo 控制接口密钥、私有地址和真实域名清单。
+Report problems or suggest features in [GitHub Issues](https://github.com/Aethersailor/Rule-Bot-Client/issues). Before posting publicly, remove access tokens, Mihomo controller secrets, private addresses, and actual domain lists.
 
-本项目采用 [GNU Affero General Public License v3.0](LICENSE)。
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
